@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Остров Иов — Интерактивная карта</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI',Tahoma,sans-serif; background:#0a0e1a; color:#ddd; overflow:hidden; height:100vh; }
+
+.topbar { position:fixed; top:0; left:0; right:0; height:48px; background:rgba(10,14,26,.95); border-bottom:1px solid #2a2e3a; display:flex; align-items:center; padding:0 20px; z-index:100; gap:12px; }
+.topbar h1 { font-size:17px; font-weight:700; background:linear-gradient(90deg,#ffb450,#ff8c00); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.topbar span { font-size:11px; color:#666; }
+
+.spirit-bar { position:fixed; top:56px; left:15px; z-index:90; background:rgba(15,19,32,.92); border:1px solid rgba(255,180,80,.25); border-radius:12px; padding:10px 18px; display:flex; align-items:center; gap:12px; transition:.3s; }
+.spirit-bar:hover { border-color:rgba(255,180,80,.6); }
+#spiritNum { font-size:18px; font-weight:700; color:#ffb450; min-width:90px; }
+#spiritSub { font-size:10px; color:#777; line-height:1.3; }
+.btn-lib { background:rgba(255,180,80,.12); border:1px solid rgba(255,180,80,.35); color:#ffb450; padding:6px 14px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; transition:.3s; white-space:nowrap; }
+.btn-lib:hover { background:rgba(255,180,80,.25); }
+.btn-lib:disabled { opacity:.3; cursor:default; }
+
+.map-container { position:absolute; top:48px; left:0; right:0; bottom:36px; overflow:hidden; cursor:grab; background:radial-gradient(ellipse at center,#0f1a2e 0%,#0a0e1a 100%); }
+.map-container:active { cursor:grabbing; }
+#mapSvg { position:absolute; transform-origin:0 0; will-change:transform; }
+
+.loc-group { cursor:pointer; }
+.loc-group:hover .loc-glow { r:18; opacity:.6; }
+.loc-group:hover text { fill:#fff !important; }
+.loc-label { font-size:11px; fill:#bbb; pointer-events:none; text-anchor:middle; font-weight:600; }
+.loc-name { font-size:9px; fill:#888; pointer-events:none; text-anchor:middle; }
+
+.side-panel { position:fixed; top:48px; right:0; width:420px; height:calc(100vh - 84px); background:rgba(12,16,28,.97); border-left:1px solid #2a2e3a; transform:translateX(100%); transition:transform .4s cubic-bezier(.22,1,.36,1); z-index:80; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#4a3f6b #1a1f35; }
+.side-panel.open { transform:translateX(0); }
+.panel-header { position:sticky; top:0; background:rgba(12,16,28,.98); padding:16px 20px 10px; border-bottom:1px solid #2a2e3a; z-index:2; }
+.panel-close { float:right; background:none; border:none; color:#888; font-size:26px; cursor:pointer; line-height:1; }
+.panel-close:hover { color:#f90; }
+.panel-title { font-size:20px; font-weight:700; color:#fff; margin-top:4px; }
+.panel-badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+.badge { font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; }
+.badge-danger { background:rgba(255,80,80,.15); color:#ff6b6b; }
+.badge-warn { background:rgba(255,180,80,.15); color:#ffb450; }
+.badge-info { background:rgba(80,150,255,.15); color:#50b4ff; }
+.badge-spirit { background:rgba(255,200,50,.15); color:#ffc832; }
+.badge-secret { background:rgba(255,100,100,.15); color:#ff4444; }
+.panel-body { padding:12px 20px 30px; }
+.panel-quote { font-style:italic; color:#ffb450; font-size:13px; margin:10px 0; padding:8px 12px; border-left:3px solid rgba(255,180,80,.3); background:rgba(255,180,80,.03); border-radius:0 8px 8px 0; }
+.panel-desc { font-size:14px; line-height:1.7; color:#ccc; margin:12px 0; }
+.panel-section-title { font-size:13px; font-weight:700; color:#ffb450; text-transform:uppercase; letter-spacing:1px; margin:14px 0 8px; }
+.panel-list { list-style:none; padding:0; }
+.panel-list li { padding:4px 0 4px 18px; position:relative; font-size:13px; color:#aaa; }
+.panel-list li::before { content:'▸'; position:absolute; left:0; color:#ffb450; }
+.panel-hokku { font-style:italic; color:#cc9944; font-size:14px; line-height:1.8; padding:12px 16px; margin:12px 0; background:rgba(255,150,50,.04); border-radius:10px; border:1px solid rgba(255,150,50,.1); }
+
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:200; display:none; justify-content:center; align-items:center; }
+.overlay.show { display:flex; }
+.egg-box { background:linear-gradient(135deg,#151a30,#1a1f35); border:1px solid rgba(255,180,80,.3); border-radius:16px; padding:30px; max-width:420px; text-align:center; box-shadow:0 0 60px rgba(255,150,50,.15); }
+.egg-box .emoji { font-size:48px; margin-bottom:10px; }
+.egg-box h3 { color:#ffb450; font-size:18px; margin-bottom:10px; }
+.egg-box p { color:#aaa; font-size:13px; line-height:1.6; }
+.egg-close { margin-top:16px; background:rgba(255,180,80,.15); border:1px solid rgba(255,180,80,.3); color:#ffb450; padding:6px 20px; border-radius:8px; cursor:pointer; font-size:13px; }
+
+.timeline { position:fixed; bottom:0; left:0; right:0; height:36px; background:rgba(10,14,26,.92); border-top:1px solid #2a2e3a; display:flex; align-items:center; padding:0 16px; gap:10px; z-index:50; }
+.tl-date { font-size:12px; color:#ffb450; font-weight:600; min-width:100px; white-space:nowrap; }
+.tl-slider { flex:1; -webkit-appearance:none; height:4px; background:#2a2e3a; border-radius:2px; outline:none; }
+.tl-slider::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:#ffb450; cursor:pointer; }
+.tl-event { font-size:11px; color:#666; max-width:250px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.hokku-bar { position:fixed; bottom:44px; left:50%; transform:translateX(-50%); text-align:center; pointer-events:none; z-index:50; }
+.hokku-text { font-style:italic; font-size:14px; color:rgba(255,220,170,.55); line-height:1.7; text-shadow:0 0 15px rgba(255,150,50,.15); transition:opacity .5s; }
+
+.zoom-controls { position:fixed; bottom:44px; right:15px; z-index:50; display:flex; flex-direction:column; gap:4px; }
+.zoom-btn { width:36px; height:36px; background:rgba(15,19,32,.9); border:1px solid #2a2e3a; color:#bbb; font-size:18px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.2s; }
+.zoom-btn:hover { background:rgba(255,180,80,.12); color:#ffb450; border-color:rgba(255,180,80,.3); }
+
+.snow-canvas { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:5; }
+
+#spiritAnimation { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:300; }
+
+.loader { position:fixed; inset:0; background:#0a0e1a; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; transition:opacity .8s; }
+.loader.hide { opacity:0; pointer-events:none; }
+.spinner { width:50px; height:50px; border:3px solid rgba(255,180,80,.1); border-top-color:#ffb450; border-radius:50%; animation:spin 1s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.loader-text { color:#ffb450; font-size:14px; margin-top:16px; letter-spacing:2px; }
+
+@media(max-width:700px){ .side-panel{width:100%} #spiritNum{font-size:15px} .spirit-bar{padding:8px 12px} }
+</style>
+</head>
+<body>
+
+<div class="loader" id="loader"><div class="spinner"></div><div class="loader-text">ОСТРОВ ИОВ</div></div>
+
+<canvas class="snow-canvas" id="snowCanvas"></canvas>
+<canvas id="spiritAnimation"></canvas>
+
+<div class="topbar">
+  <h1>🌑 Остров Иов</h1>
+  <span>Интерактивная карта мира романа · Тайны тёмной материи</span>
+</div>
+
+<div class="spirit-bar">
+  <div>
+    <div id="spiritNum">0 / 86 125</div>
+    <div id="spiritSub">сгустков тёмной материи<br>освобождено из Резервуара №7</div>
+  </div>
+  <button class="btn-lib" id="btnLiberate" onclick="doLiberate()">⚡ ВЫПУСТИТЬ</button>
+</div>
+
+<div class="map-container" id="mapContainer">
+  <svg id="mapSvg" viewBox="0 0 1200 860" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="glow"><feGaussianBlur stdDeviation="5" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <filter id="glow2"><feGaussianBlur stdDeviation="12" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <radialGradient id="seaG"><stop offset="0%" stop-color="#0f1a2e"/><stop offset="100%" stop-color="#080c18"/></radialGradient>
+      <radialGradient id="islandG"><stop offset="0%" stop-color="#1e2d38"/><stop offset="100%" stop-color="#15202a"/></radialGradient>
+      <radialGradient id="craterG"><stop offset="0%" stop-color="#0a0808"/><stop offset="100%" stop-color="#15100a"/></radialGradient>
+      <linearGradient id="lavaG"><stop offset="0%" stop-color="#ff4400" stop-opacity=".6"/><stop offset="100%" stop-color="#441100" stop-opacity="0"/></linearGradient>
+      <radialGradient id="springG"><stop offset="0%" stop-color="#ffddaa" stop-opacity=".35"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient>
+    </defs>
+
+    <!-- Ocean -->
+    <rect width="1200" height="860" fill="url(#seaG)"/>
+
+    <!-- Grid -->
+    <g stroke="rgba(100,140,180,.04)" stroke-width=".5">
+      <line x1="0" y1="200" x2="1200" y2="200"/><line x1="0" y1="400" x2="1200" y2="400"/>
+      <line x1="0" y1="600" x2="1200" y2="600"/><line x1="300" y1="0" x2="300" y2="860"/>
+      <line x1="600" y1="0" x2="600" y2="860"/><line x1="900" y1="0" x2="900" y2="860"/>
+    </g>
+
+    <!-- WAVES -->
+    <g opacity=".07">
+      <path d="M0,840 Q30,835 60,840 Q90,845 120,840 Q150,835 180,840 Q210,845 240,840 Q270,835 300,840 Q330,845 360,840 Q390,835 420,840 Q450,845 480,840 Q510,835 540,840 Q570,845 600,840 Q630,835 660,840 Q690,845 720,840 Q750,835 780,840 Q810,845 840,840 Q870,835 900,840 Q930,845 960,840 Q990,835 1020,840 Q1050,845 1080,840 Q1110,835 1140,840 Q1170,845 1200,840" fill="none" stroke="#4488cc" stroke-width="1.2">
+        <animate attributeName="d" dur="6s" repeatCount="indefinite" values="
+          M0,840 Q30,835 60,840 Q90,845 120,840 Q150,835 180,840 Q210,845 240,840 Q270,835 300,840 Q330,845 360,840 Q390,835 420,840 Q450,845 480,840 Q510,835 540,840 Q570,845 600,840 Q630,835 660,840 Q690,845 720,840 Q750,835 780,840 Q810,845 840,840 Q870,835 900,840 Q930,845 960,840 Q990,835 1020,840 Q1050,845 1080,840 Q1110,835 1140,840 Q1170,845 1200,840;
+          M0,840 Q30,845 60,840 Q90,835 120,840 Q150,845 180,840 Q210,835 240,840 Q270,845 300,840 Q330,835 360,840 Q390,845 420,840 Q450,835 480,840 Q510,845 540,840 Q570,835 600,840 Q630,845 660,840 Q690,835 720,840 Q750,845 780,840 Q810,835 840,840 Q870,845 900,840 Q930,835 960,840 Q990,845 1020,840 Q1050,835 1080,840 Q1110,845 1140,840 Q1170,835 1200,840;
+          M0,840 Q30,835 60,840 Q90,845 120,840 Q150,835 180,840 Q210,845 240,840 Q270,835 300,840 Q330,845 360,840 Q390,835 420,840 Q450,845 480,840 Q510,835 540,840 Q570,845 600,840 Q630,835 660,840 Q690,845 720,840 Q750,835 780,840 Q810,845 840,840 Q870,835 900,840 Q930,845 960,840 Q990,835 1020,840 Q1050,845 1080,840 Q1110,835 1140,840 Q1170,845 1200,840
+        "/>
+      </path>
+      <path d="M0,850 Q30,846 60,850 Q90,854 120,850 Q150,846 180,850 Q210,854 240,850 Q270,846 300,850 Q330,854 360,850 Q390,846 420,850 Q450,854 480,850 Q510,846 540,850 Q570,854 600,850 Q630,846 660,850 Q690,854 720,850 Q750,846 780,850 Q810,854 840,850 Q870,846 900,850 Q930,854 960,850 Q990,846 1020,850 Q1050,854 1080,850 Q1110,846 1140,850 Q1170,854 1200,850" fill="none" stroke="#4488cc" stroke-width=".8">
+        <animate attributeName="d" dur="7s" repeatCount="indefinite" values="
+          M0,850 Q30,846 60,850 Q90,854 120,850 Q150,846 180,850 Q210,854 240,850 Q270,846 300,850 Q330,854 360,850 Q390,846 420,850 Q450,854 480,850 Q510,846 540,850 Q570,854 600,850 Q630,846 660,850 Q690,854 720,850 Q750,846 780,850 Q810,854 840,850 Q870,846 900,850 Q930,854 960,850 Q990,846 1020,850 Q1050,854 1080,850 Q1110,846 1140,850 Q1170,854 1200,850;
+          M0,850 Q30,854 60,850 Q90,846 120,850 Q150,854 180,850 Q210,846 240,850 Q270,854 300,850 Q330,846 360,850 Q390,854 420,850 Q450,846 480,850 Q510,854 540,850 Q570,846 600,850 Q630,854 660,850 Q690,846 720,850 Q750,854 780,850 Q810,846 840,850 Q870,854 900,850 Q930,846 960,850 Q990,854 1020,850 Q1050,846 1080,850 Q1110,854 1140,850 Q1170,846 1200,850;
+          M0,850 Q30,846 60,850 Q90,854 120,850 Q150,846 180,850 Q210,854 240,850 Q270,846 300,850 Q330,854 360,850 Q390,846 420,850 Q450,854 480,850 Q510,846 540,850 Q570,854 600,850 Q630,846 660,850 Q690,854 720,850 Q750,846 780,850 Q810,854 840,850 Q870,846 900,850 Q930,854 960,850 Q990,846 1020,850 Q1050,854 1080,850 Q1110,846 1140,850 Q1170,854 1200,850
+        "/>
+      </path>
+      <!-- Upper wave lines -->
+      <path d="M0,100 Q40,95 80,100 Q120,105 160,100 Q200,95 240,100 Q280,105 320,100 Q360,95 400,100 Q440,105 480,100 Q520,95 560,100 Q600,105 640,100 Q680,95 720,100 Q760,105 800,100 Q840,95 880,100 Q920,105 960,100 Q1000,95 1040,100 Q1080,105 1120,100 Q1160,95 1200,100" fill="none" stroke="#4488cc" stroke-width=".7">
+        <animate attributeName="d" dur="8s" repeatCount="indefinite" values="
+          M0,100 Q40,95 80,100 Q120,105 160,100 Q200,95 240,100 Q280,105 320,100 Q360,95 400,100 Q440,105 480,100 Q520,95 560,100 Q600,105 640,100 Q680,95 720,100 Q760,105 800,100 Q840,95 880,100 Q920,105 960,100 Q1000,95 1040,100 Q1080,105 1120,100 Q1160,95 1200,100;
+          M0,100 Q40,105 80,100 Q120,95 160,100 Q200,105 240,100 Q280,95 320,100 Q360,105 400,100 Q440,95 480,100 Q520,105 560,100 Q600,95 640,100 Q680,105 720,100 Q760,95 800,100 Q840,105 880,100 Q920,95 960,100 Q1000,105 1040,100 Q1080,95 1120,100 Q1160,105 1200,100;
+          M0,100 Q40,95 80,100 Q120,105 160,100 Q200,95 240,100 Q280,105 320,100 Q360,95 400,100 Q440,105 480,100 Q520,95 560,100 Q600,105 640,100 Q680,95 720,100 Q760,105 800,100 Q840,95 880,100 Q920,105 960,100 Q1000,95 1040,100 Q1080,105 1120,100 Q1160,95 1200,100
+        "/>
+      </path>
+      <path d="M100,780 Q140,776 180,780 Q220,784 260,780 Q300,776 340,780 Q380,784 420,780 Q460,776 500,780 Q540,784 580,780 Q620,776 660,780 Q700,784 740,780 Q780,776 820,780 Q860,784 900,780 Q940,776 980,780 Q1020,784 1060,780 Q1100,776 1140,780 Q1180,784 1200,780" fill="none" stroke="#4488cc" stroke-width=".5">
+        <animate attributeName="d" dur="5s" repeatCount="indefinite" values="
+          M100,780 Q140,776 180,780 Q220,784 260,780 Q300,776 340,780 Q380,784 420,780 Q460,776 500,780 Q540,784 580,780 Q620,776 660,780 Q700,784 740,780 Q780,776 820,780 Q860,784 900,780 Q940,776 980,780 Q1020,784 1060,780 Q1100,776 1140,780 Q1180,784 1200,780;
+          M100,780 Q140,784 180,780 Q220,776 260,780 Q300,784 340,780 Q380,776 420,780 Q460,784 500,780 Q540,776 580,780 Q620,784 660,780 Q700,776 740,780 Q780,784 820,780 Q860,776 900,780 Q940,784 980,780 Q1020,776 1060,780 Q1100,784 1140,780 Q1180,776 1200,780;
+          M100,780 Q140,776 180,780 Q220,784 260,780 Q300,776 340,780 Q380,784 420,780 Q460,776 500,780 Q540,784 580,780 Q620,776 660,780 Q700,784 740,780 Q780,776 820,780 Q860,784 900,780 Q940,776 980,780 Q1020,784 1060,780 Q1100,776 1140,780 Q1180,784 1200,780
+        "/>
+      </path>
+      <path d="M50,50 Q90,46 130,50 Q170,54 210,50 Q250,46 290,50 Q330,54 370,50 Q410,46 450,50 Q490,54 530,50 Q570,46 610,50 Q650,54 690,50 Q730,46 770,50 Q810,54 850,50 Q890,46 930,50 Q970,54 1010,50 Q1050,46 1090,50 Q1130,54 1170,50 Q1200,46 1200,50" fill="none" stroke="#4488cc" stroke-width=".6">
+        <animate attributeName="d" dur="9s" repeatCount="indefinite" values="
+          M50,50 Q90,46 130,50 Q170,54 210,50 Q250,46 290,50 Q330,54 370,50 Q410,46 450,50 Q490,54 530,50 Q570,46 610,50 Q650,54 690,50 Q730,46 770,50 Q810,54 850,50 Q890,46 930,50 Q970,54 1010,50 Q1050,46 1090,50 Q1130,54 1170,50 Q1200,46 1200,50;
+          M50,50 Q90,54 130,50 Q170,46 210,50 Q250,54 290,50 Q330,46 370,50 Q410,54 450,50 Q490,46 530,50 Q570,54 610,50 Q650,46 690,50 Q730,54 770,50 Q810,46 850,50 Q890,54 930,50 Q970,46 1010,50 Q1050,54 1090,50 Q1130,46 1170,50 Q1200,54 1200,50;
+          M50,50 Q90,46 130,50 Q170,54 210,50 Q250,46 290,50 Q330,54 370,50 Q410,46 450,50 Q490,54 530,50 Q570,46 610,50 Q650,54 690,50 Q730,46 770,50 Q810,54 850,50 Q890,46 930,50 Q970,54 1010,50 Q1050,46 1090,50 Q1130,54 1170,50 Q1200,46 1200,50
+        "/>
+      </path>
+      <!-- Wave spots around island coasts -->
+      <ellipse cx="150" cy="750" rx="60" ry="10" fill="none" stroke="#4488cc" stroke-width=".6">
+        <animate attributeName="rx" values="60;65;60" dur="4s" repeatCount="indefinite"/>
+      </ellipse>
+      <ellipse cx="1000" cy="250" rx="50" ry="8" fill="none" stroke="#4488cc" stroke-width=".5">
+        <animate attributeName="ry" values="8;12;8" dur="5s" repeatCount="indefinite"/>
+      </ellipse>
+      <path d="M650,100 Q670,97 690,100 Q710,103 730,100 Q750,97 770,100 Q790,103 810,100" fill="none" stroke="#4488cc" stroke-width=".5">
+        <animate attributeName="d" dur="6s" repeatCount="indefinite" values="M650,100 Q670,97 690,100 Q710,103 730,100 Q750,97 770,100 Q790,103 810,100;M650,100 Q670,103 690,100 Q710,97 730,100 Q750,103 770,100 Q790,97 810,100;M650,100 Q670,97 690,100 Q710,103 730,100 Q750,97 770,100 Q790,103 810,100"/>
+      </path>
+    </g>
+
+    <!-- ISLAND -->
+    <path d="M210,740 Q190,690 170,640 Q140,590 150,530 Q140,470 165,410 Q175,360 200,310 Q220,265 250,220 Q280,185 320,155 Q360,130 410,120 Q460,115 520,118 Q580,110 640,120 Q700,112 750,130 Q800,125 850,140 Q900,135 940,155 Q980,175 1010,210 Q1040,245 1050,290 Q1060,335 1045,385 Q1055,435 1035,485 Q1025,535 1005,580 Q985,625 965,660 Q945,690 920,710 Q885,735 845,750 Q800,760 760,755 Q720,760 680,750 Q640,760 600,755 Q560,760 520,750 Q480,755 440,745 Q400,750 360,740 Q320,745 280,735 Z" fill="url(#islandG)" stroke="rgba(100,140,180,.15)" stroke-width="1.5"/>
+
+    <!-- Forest zones -->
+    <ellipse cx="270" cy="580" rx="80" ry="120" fill="rgba(10,40,20,.3)"/>
+    <ellipse cx="830" cy="260" rx="100" ry="80" fill="rgba(10,40,20,.25)"/>
+    <ellipse cx="620" cy="160" rx="120" ry="70" fill="rgba(10,40,20,.2)"/>
+
+    <!-- SNOWY PINES -->
+    <g stroke-linecap="round" stroke-linejoin="round">
+      <!-- NW forest -->
+      <g transform="translate(200,680)">
+        <line x1="0" y1="0" x2="0" y2="-18" stroke="#1a3020" stroke-width="2"/>
+        <polygon points="-8,-16 0,-34 8,-16" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-6,-26" x2="6,-26" stroke="#dde" stroke-width="1.2" opacity=".6"/>
+        <polygon points="-6,-30 0,-42 6,-30" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-36" x2="4,-36" stroke="#dde" stroke-width="1" opacity=".5"/>
+      </g>
+      <g transform="translate(215,665)">
+        <line x1="0" y1="0" x2="0" y2="-14" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-6,-12 0,-26 6,-12" fill="#0b2e16" stroke="#0b2e16" stroke-width=".5"/>
+        <line x1="-5,-20" x2="5,-20" stroke="#dde" stroke-width="1" opacity=".5"/>
+      </g>
+      <g transform="translate(185,690)">
+        <line x1="0" y1="0" x2="0" y2="-12" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-5,-10 0,-22 5,-10" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-16" x2="4,-16" stroke="#dde" stroke-width="1" opacity=".4"/>
+      </g>
+      <g transform="translate(230,695)">
+        <line x1="0" y1="0" x2="0" y2="-10" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-5,-8 0,-18 5,-8" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-3,-14" x2="3,-14" stroke="#dde" stroke-width="1" opacity=".35"/>
+      </g>
+      <!-- NE forest -->
+      <g transform="translate(890,200)">
+        <line x1="0" y1="0" x2="0" y2="-16" stroke="#1a3020" stroke-width="1.8"/>
+        <polygon points="-7,-14 0,-30 7,-14" fill="#0b2e16" stroke="#0b2e16" stroke-width=".5"/>
+        <line x1="-5,-24" x2="5,-24" stroke="#dde" stroke-width="1" opacity=".5"/>
+      </g>
+      <g transform="translate(905,188)">
+        <line x1="0" y1="0" x2="0" y2="-13" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-6,-11 0,-23 6,-11" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-17" x2="4,-17" stroke="#dde" stroke-width="1" opacity=".45"/>
+      </g>
+      <g transform="translate(875,215)">
+        <line x1="0" y1="0" x2="0" y2="-12" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-5,-10 0,-21 5,-10" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-15" x2="4,-15" stroke="#dde" stroke-width=".8" opacity=".4"/>
+      </g>
+      <!-- Center-north -->
+      <g transform="translate(600,140)">
+        <line x1="0" y1="0" x2="0" y2="-15" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-6,-13 0,-27 6,-13" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-21" x2="4,-21" stroke="#dde" stroke-width="1" opacity=".4"/>
+      </g>
+      <g transform="translate(620,132)">
+        <line x1="0" y1="0" x2="0" y2="-12" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-5,-10 0,-21 5,-10" fill="#0b2e16" stroke="#0b2e16" stroke-width=".5"/>
+        <line x1="-3,-16" x2="3,-16" stroke="#dde" stroke-width=".8" opacity=".35"/>
+      </g>
+      <!-- West coast -->
+      <g transform="translate(165,500)">
+        <line x1="0" y1="0" x2="0" y2="-14" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-6,-12 0,-25 6,-12" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-19" x2="4,-19" stroke="#dde" stroke-width=".9" opacity=".4"/>
+      </g>
+      <g transform="translate(155,515)">
+        <line x1="0" y1="0" x2="0" y2="-10" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-5,-8 0,-17 5,-8" fill="#0b2e16" stroke="#0b2e16" stroke-width=".5"/>
+        <line x1="-3,-13" x2="3,-13" stroke="#dde" stroke-width=".8" opacity=".35"/>
+      </g>
+      <!-- East side -->
+      <g transform="translate(970,350)">
+        <line x1="0" y1="0" x2="0" y2="-16" stroke="#1a3020" stroke-width="1.8"/>
+        <polygon points="-7,-14 0,-30 7,-14" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-5,-24" x2="5,-24" stroke="#dde" stroke-width="1" opacity=".45"/>
+      </g>
+      <g transform="translate(985,335)">
+        <line x1="0" y1="0" x2="0" y2="-13" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-6,-11 0,-23 6,-11" fill="#0b2e16" stroke="#0b2e16" stroke-width=".5"/>
+        <line x1="-4,-17" x2="4,-17" stroke="#dde" stroke-width=".8" opacity=".35"/>
+      </g>
+      <!-- SE coast -->
+      <g transform="translate(920,650)">
+        <line x1="0" y1="0" x2="0" y2="-14" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-6,-12 0,-25 6,-12" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-19" x2="4,-19" stroke="#dde" stroke-width=".9" opacity=".4"/>
+      </g>
+      <g transform="translate(935,638)">
+        <line x1="0" y1="0" x2="0" y2="-11" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-5,-9 0,-19 5,-9" fill="#0b2e16" stroke="#0b2e16" stroke-width=".5"/>
+        <line x1="-3,-14" x2="3,-14" stroke="#dde" stroke-width=".8" opacity=".3"/>
+      </g>
+      <!-- South area -->
+      <g transform="translate(480,700)">
+        <line x1="0" y1="0" x2="0" y2="-13" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-6,-11 0,-23 6,-11" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-17" x2="4,-17" stroke="#dde" stroke-width=".9" opacity=".35"/>
+      </g>
+      <g transform="translate(500,710)">
+        <line x1="0" y1="0" x2="0" y2="-10" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-5,-8 0,-17 5,-8" fill="#0b2e16" stroke="#0b2e16" stroke-width=".5"/>
+        <line x1="-3,-13" x2="3,-13" stroke="#dde" stroke-width=".7" opacity=".3"/>
+      </g>
+      <!-- Near source -->
+      <g transform="translate(370,560)">
+        <line x1="0" y1="0" x2="0" y2="-15" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-6,-13 0,-27 6,-13" fill="#0a2a15" stroke="#0a2a15" stroke-width=".5"/>
+        <line x1="-4,-21" x2="4,-21" stroke="#dde" stroke-width="1" opacity=".4"/>
+      </g>
+      <g transform="translate(310,570)">
+        <line x1="0" y1="0" x2="0" y2="-12" stroke="#1a3020" stroke-width="1.5"/>
+        <polygon points="-5,-10 0,-21 5,-10" fill="#0b2e16" stroke="#0b2e16" stroke-width=".5"/>
+        <line x1="-3,-16" x2="3,-16" stroke="#dde" stroke-width=".8" opacity=".35"/>
+      </g>
+    </g>
+
+    <!-- CRATER -->
+    <ellipse cx="600" cy="400" rx="130" ry="85" fill="url(#craterG)" stroke="rgba(255,100,50,.12)" stroke-width="1"/>
+    <ellipse cx="600" cy="400" rx="105" ry="60" fill="#080606" stroke="rgba(255,80,30,.08)" stroke-width=".5"/>
+
+    <!-- Lava cracks -->
+    <path d="M570,395 Q580,375 595,385 Q610,370 625,380" stroke="#ff4400" stroke-width="1" fill="none" opacity=".35">
+      <animate attributeName="opacity" values=".3;.6;.3" dur="4s" repeatCount="indefinite"/>
+    </path>
+    <path d="M555,402 Q570,388 588,398 Q605,385 622,395" stroke="#ff6600" stroke-width=".7" fill="none" opacity=".25">
+      <animate attributeName="opacity" values=".25;.5;.25" dur="3.5s" repeatCount="indefinite"/>
+    </path>
+
+    <!-- Underground labs -->
+    <g opacity=".4">
+      <rect x="560" y="410" width="80" height="28" rx="3" fill="none" stroke="rgba(255,100,50,.2)" stroke-dasharray="3,3"/>
+      <text x="600" y="428" text-anchor="middle" fill="rgba(255,100,50,.3)" font-size="8" font-family="sans-serif">ХОРАНИЛИЩЕ РЕЗЕРВУАРОВ</text>
+      <rect x="575" y="416" width="50" height="16" rx="2" fill="none" stroke="rgba(255,180,50,.2)">
+        <animate attributeName="stroke-opacity" values=".2;.5;.2" dur="3s" repeatCount="indefinite"/>
+      </rect>
+      <text x="600" y="427" text-anchor="middle" fill="rgba(255,180,50,.35)" font-size="7" font-family="sans-serif">РЕЗЕРВУАР №7</text>
+    </g>
+
+    <!-- Spirit particles over tank 7 -->
+    <circle cx="585" cy="418" r="1.5" fill="#ffb450" opacity=".4">
+      <animate attributeName="cy" values="418;392;418" dur="6s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values=".4;.8;.4" dur="6s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="605" cy="428" r="1.2" fill="#ffcc66" opacity=".3">
+      <animate attributeName="cy" values="428;400;428" dur="5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="595" cy="436" r="1.3" fill="#ffa533" opacity=".35">
+      <animate attributeName="cy" values="436;405;436" dur="7s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- Energy field circles -->
+    <circle cx="600" cy="425" r="55" fill="none" stroke="#ffb450" stroke-width=".5" opacity=".12">
+      <animate attributeName="r" values="50;60;50" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values=".12;.05;.12" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="600" cy="425" r="75" fill="none" stroke="#ffb450" stroke-width=".3" opacity=".08">
+      <animate attributeName="r" values="70;80;70" dur="5s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- Paths -->
+    <g stroke="rgba(200,200,200,.08)" stroke-width="1" fill="none" stroke-dasharray="3,5">
+      <line x1="600" y1="330" x2="600" y2="290"/>
+      <line x1="600" y1="290" x2="460" y2="245"/>
+      <line x1="600" y1="290" x2="355" y2="245"/>
+      <line x1="600" y1="290" x2="510" y2="285"/>
+      <line x1="600" y1="290" x2="550" y2="255"/>
+      <line x1="600" y1="330" x2="280" y2="365"/>
+      <line x1="600" y1="330" x2="880" y2="365"/>
+      <line x1="600" y1="400" x2="340" y2="590"/>
+      <line x1="600" y1="400" x2="200" y2="500"/>
+      <line x1="600" y1="400" x2="760" y2="490"/>
+      <line x1="600" y1="400" x2="450" y2="340"/>
+      <line x1="450" y1="340" x2="160" y2="590"/>
+      <line x1="600" y1="400" x2="650" y2="300"/>
+    </g>
+
+    <!-- Secret tunnel -->
+    <path d="M600,400 Q540,490 390,640 Q270,715 190,728 Q160,738 155,615" stroke="rgba(255,200,100,.12)" stroke-width="1" fill="none" stroke-dasharray="5,5"/>
+
+    <!-- LOCATIONS -->
+    <g class="loc-group" data-id="nii" onclick="openLocation('nii')">
+      <circle class="loc-glow" cx="600" cy="288" r="14" fill="rgba(255,180,80,.1)" filter="url(#glow)"/>
+      <rect x="580" y="270" width="40" height="28" rx="4" fill="rgba(40,50,70,.7)" stroke="rgba(255,200,100,.5)" stroke-width="1.2"/>
+      <text x="600" y="288" text-anchor="middle" fill="#ffb450" font-size="10" font-weight="bold" font-family="sans-serif">НИИ</text>
+      <text class="loc-label" x="600" y="310">НИИ «Предельные Энергии»</text>
+      <text class="loc-name" x="600" y="321">Наука / Секретное</text>
+    </g>
+
+    <g class="loc-group" data-id="family" onclick="openLocation('family')">
+      <circle class="loc-glow" cx="280" cy="358" r="14" fill="rgba(100,200,150,.1)" filter="url(#glow)"/>
+      <rect x="260" y="340" width="40" height="36" rx="4" fill="rgba(40,60,50,.5)" stroke="rgba(100,200,150,.4)" stroke-width="1"/>
+      <text x="280" y="360" text-anchor="middle" fill="rgba(100,200,150,.7)" font-size="8" font-family="sans-serif">🏠</text>
+      <text class="loc-label" x="280" y="388">Кампус семейных</text>
+      <text class="loc-name" x="280" y="398">Жильё</text>
+    </g>
+
+    <g class="loc-group" data-id="single" onclick="openLocation('single')">
+      <circle class="loc-glow" cx="880" cy="358" r="14" fill="rgba(150,100,255,.1)" filter="url(#glow)"/>
+      <rect x="860" y="340" width="40" height="36" rx="4" fill="rgba(40,40,60,.5)" stroke="rgba(150,100,255,.4)" stroke-width="1"/>
+      <text x="880" y="360" text-anchor="middle" fill="rgba(150,100,255,.7)" font-size="8" font-family="sans-serif">🏚️</text>
+      <text class="loc-label" x="880" y="388">Кампус одиноких</text>
+      <text class="loc-name" x="880" y="398">Жильё</text>
+    </g>
+
+    <g class="loc-group" data-id="spring" onclick="openLocation('spring')">
+      <circle class="loc-glow" cx="340" cy="585" r="14" fill="rgba(255,220,150,.1)" filter="url(#glow)"/>
+      <ellipse cx="340" cy="580" rx="18" ry="12" fill="rgba(255,200,100,.08)" filter="url(#springG)"/>
+      <ellipse cx="340" cy="580" rx="14" ry="9" fill="none" stroke="rgba(255,220,150,.4)" stroke-width="1"/>
+      <text class="loc-label" x="340" y="605">「Токи-но-ири」</text>
+      <text class="loc-name" x="340" y="615">Термальный источник</text>
+    </g>
+
+    <g class="loc-group" data-id="caves" onclick="openLocation('caves')">
+      <circle class="loc-glow" cx="200" cy="495" r="14" fill="rgba(180,160,120,.1)" filter="url(#glow)"/>
+      <path d="M180,490 Q185,478 190,490 Q195,475 200,490 Q205,478 210,490 Q215,475 220,490 L220,502 Q215,494 210,500 Q205,492 200,498 Q195,492 190,500 Q185,494 180,502 Z" fill="rgba(30,30,25,.6)" stroke="rgba(180,160,120,.3)" stroke-width=".8"/>
+      <text class="loc-label" x="200" y="518">Пещеры</text>
+      <text class="loc-name" x="200" y="528">Секретное</text>
+    </g>
+
+    <g class="loc-group" data-id="museum" onclick="openLocation('museum')">
+      <circle class="loc-glow" cx="460" cy="242" r="12" fill="rgba(200,170,100,.1)" filter="url(#glow)"/>
+      <rect x="448" y="228" width="24" height="18" rx="2" fill="rgba(60,50,40,.5)" stroke="rgba(200,170,100,.35)" stroke-width=".8"/>
+      <polygon points="448,228 460,218 472,228" fill="rgba(60,50,40,.6)"/>
+      <text class="loc-label" x="460" y="258">Музей</text>
+      <text class="loc-name" x="460" y="268">Природа</text>
+    </g>
+
+    <g class="loc-group" data-id="church" onclick="openLocation('church')">
+      <circle class="loc-glow" cx="355" cy="238" r="12" fill="rgba(255,220,150,.08)" filter="url(#glow)"/>
+      <rect x="348" y="228" width="14" height="16" fill="rgba(60,50,40,.5)" stroke="rgba(200,180,120,.3)" stroke-width=".6"/>
+      <polygon points="355,220 347,228 363,228" fill="rgba(80,60,40,.6)"/>
+      <line x1="355" y1="216" x2="355" y2="220" stroke="rgba(255,220,150,.4)" stroke-width=".8"/>
+      <text class="loc-label" x="355" y="254">Церковь</text>
+      <text class="loc-name" x="355" y="264">Духовное</text>
+    </g>
+
+    <g class="loc-group" data-id="library" onclick="openLocation('library')">
+      <circle class="loc-glow" cx="550" cy="250" r="12" fill="rgba(100,150,200,.1)" filter="url(#glow)"/>
+      <rect x="538" y="238" width="24" height="16" rx="2" fill="rgba(30,40,50,.5)" stroke="rgba(100,150,200,.35)" stroke-width=".8"/>
+      <line x1="542" y1="244" x2="558" y2="244" stroke="rgba(100,150,200,.2)" stroke-width=".5"/>
+      <line x1="542" y1="248" x2="556" y2="248" stroke="rgba(100,150,200,.2)" stroke-width=".5"/>
+      <text class="loc-label" x="550" y="266">Библиотека</text>
+      <text class="loc-name" x="550" y="276">Наука</text>
+    </g>
+
+    <g class="loc-group" data-id="cafeteria" onclick="openLocation('cafeteria')">
+      <circle class="loc-glow" cx="510" cy="280" r="12" fill="rgba(200,170,80,.1)" filter="url(#glow)"/>
+      <rect x="500" y="268" width="20" height="16" rx="2" fill="rgba(50,45,35,.5)" stroke="rgba(200,170,80,.35)" stroke-width=".8"/>
+      <circle cx="510" cy="276" r="3" fill="none" stroke="rgba(200,170,80,.2)" stroke-width=".5"/>
+      <text class="loc-label" x="510" y="296">Столовая</text>
+      <text class="loc-name" x="510" y="306">Жильё</text>
+    </g>
+
+    <g class="loc-group" data-id="ski" onclick="openLocation('ski')">
+      <circle class="loc-glow" cx="760" cy="485" r="14" fill="rgba(100,200,255,.08)" filter="url(#glow)"/>
+      <rect x="745" y="470" width="30" height="18" rx="3" fill="rgba(30,50,70,.5)" stroke="rgba(100,200,255,.3)" stroke-width=".8"/>
+      <text x="760" y="482" text-anchor="middle" fill="rgba(100,200,255,.6)" font-size="7" font-family="sans-serif">❄</text>
+      <text class="loc-label" x="760" y="498">Лыжная база</text>
+      <text class="loc-name" x="760" y="508">Природа</text>
+    </g>
+
+    <g class="loc-group" data-id="voronov" onclick="openLocation('voronov')">
+      <circle class="loc-glow" cx="650" cy="292" r="12" fill="rgba(255,100,100,.08)" filter="url(#glow)"/>
+      <rect x="640" y="280" width="20" height="18" rx="2" fill="rgba(50,20,20,.5)" stroke="rgba(255,100,100,.35)" stroke-width=".8"/>
+      <text class="loc-label" x="650" y="308">Кабинет Воронова</text>
+      <text class="loc-name" x="650" y="318">Секретное</text>
+    </g>
+
+    <g class="loc-group" data-id="coast" onclick="openLocation('coast')">
+      <circle class="loc-glow" cx="160" cy="585" r="14" fill="rgba(80,150,255,.08)" filter="url(#glow)"/>
+      <path d="M120,580 Q140,590 160,580 Q180,592 200,580" fill="none" stroke="rgba(80,150,255,.3)" stroke-width="1"/>
+      <text class="loc-label" x="160" y="600">Берег океана</text>
+      <text class="loc-name" x="160" y="610">Природа</text>
+    </g>
+
+    <g class="loc-group" data-id="botanical" onclick="openLocation('botanical')">
+      <circle class="loc-glow" cx="450" cy="335" r="14" fill="rgba(100,200,100,.08)" filter="url(#glow)"/>
+      <circle cx="440" cy="330" r="8" fill="rgba(20,60,30,.4)" stroke="rgba(100,200,100,.25)" stroke-width=".6"/>
+      <circle cx="458" cy="334" r="6" fill="rgba(20,60,30,.35)" stroke="rgba(100,200,100,.2)" stroke-width=".5"/>
+      <text class="loc-label" x="450" y="352">Ботанический сад</text>
+      <text class="loc-name" x="450" y="362">Природа</text>
+    </g>
+
+    <g class="loc-group" data-id="tunnel" onclick="openLocation('tunnel')">
+      <circle class="loc-glow" cx="155" cy="610" r="12" fill="rgba(255,200,100,.06)" filter="url(#glow)"/>
+      <path d="M140,610 Q145,598 150,610" fill="none" stroke="rgba(255,200,100,.25)" stroke-width=".8" stroke-dasharray="2,2"/>
+      <text class="loc-label" x="155" y="630">Тоннель</text>
+      <text class="loc-name" x="155" y="640">Секретное</text>
+    </g>
+
+    <!-- Compass -->
+    <g transform="translate(1120,50)" opacity=".18">
+      <circle cx="0" cy="0" r="18" fill="none" stroke="#aaa" stroke-width=".5"/>
+      <text x="0" y="-23" text-anchor="middle" fill="#aaa" font-size="9" font-family="sans-serif">С</text>
+      <line x1="0" y1="-16" x2="0" y2="16" stroke="#aaa" stroke-width=".5"/>
+      <line x1="-16" y1="0" x2="16" y2="0" stroke="#aaa" stroke-width=".5"/>
+      <polygon points="0,-16 -3,-7 3,-7" fill="#aaa"/>
+    </g>
+
+    <!-- Scale -->
+    <g transform="translate(100,838)" opacity=".18">
+      <line x1="0" y1="0" x2="90" y2="0" stroke="#aaa" stroke-width=".7"/>
+      <text x="45" y="12" text-anchor="middle" fill="#aaa" font-size="7" font-family="sans-serif">~5 км</text>
+    </g>
+
+    <!-- Title -->
+    <text x="600" y="828" text-anchor="middle" fill="rgba(255,200,100,.08)" font-size="16" font-family="serif" letter-spacing="5">ОСТРОВ ИОВ</text>
+    <text x="600" y="842" text-anchor="middle" fill="rgba(255,200,100,.05)" font-size="9" font-family="sans-serif" letter-spacing="2">ТИХИЙ ОКЕАН · 48° с.ш.</text>
+  </svg>
+</div>
+
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header">
+    <button class="panel-close" onclick="closePanel()">✕</button>
+    <div class="panel-title" id="panelTitle"></div>
+    <div class="panel-badges" id="panelBadges"></div>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+</div>
+
+<div class="overlay" id="eggOverlay" onclick="closeEgg()">
+  <div class="egg-box" id="eggBox"></div>
+</div>
+
+<div class="timeline">
+  <span class="tl-date" id="tlDate">31 дек 2024</span>
+  <input type="range" class="tl-slider" id="tlSlider" min="0" max="100" value="0" oninput="doTimeline(this.value)">
+  <span class="tl-event" id="tlEvent">Новый Год на острове</span>
+</div>
+
+<div class="hokku-bar"><div class="hokku-text" id="hokkuText">Снег прошёл. Точно ничего не было. Но ты знаешь, что это не так.</div></div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" onclick="doZoom(1.25)">+</button>
+  <button class="zoom-btn" onclick="doZoom(0.8)">−</button>
+  <button class="zoom-btn" onclick="resetZoom()" style="font-size:12px">⟲</button>
+</div>
+
+<script>
+var locations = {
+  nii:{name:"НИИ «Предельные Энергии»",badges:[["classified","badge-danger"],["high-security","badge-warn"]],quote:"«Здесь мы сможем исследовать то, что другие боятся даже упомянуть.»",description:"Главный НИИ в центре острова, в кратере вулкана. Подземные лаборатории и хранилище резервуаров с тёмной материей — энергетическими душами древних воинов.",details:["Главный корпус — open-space","Подземные лаборатории и хранилище 10 резервуаров","Резервуар №7 — место краха проекта","Серверная с 35 серверами","Кабинет директора Кузнецова М.Ф.","Кабинет зам. по IT Воронова","Обсерватория «Вулкан-1»"],hokku:"Огонь, что горит в сердце твоём.\nДа не угаснет, но не сожжёт\nТебя своим собственным пламенем."},
+  family:{name:"Кампус для семейных сотрудников",badges:[["residential","badge-info"]],quote:"«Большая пушистая ёлка стоит в углу комнаты — вся усыпанная игрушками.»",description:"Кампус напротив НИИ, где живёт Светлана Лебедева с семьёй. Рождественские праздники проходят в детском лагере на другой стороне острова.",details:["Многоквартирные дома","Детский лагерь — новогодние праздники","Квартира Светланы (окно с гирляндой)","Российский флаг на балконе 6-го этажа"],hokku:null},
+  single:{name:"Кампус для одиноких сотрудников",badges:[["residential","badge-info"],["solitary","badge-warn"]],quote:"«Наш кампус — исключительно для одиноких сотрудников.»",description:"Кампус для одиноких сотрудников. Здесь живут Лира Амалова и Ефросинья Степановна Кукушкина. Консьержка постоянно наблюдает за жильцами.",details:["Квартира-студия Лиры (закрытые шторы)","Квартира Ефросиньи — «музей редкостей»","Консьержка, наблюдающая за жильцами","Стационарные телефоны без мобильной связи"],hokku:"Все вокруг радуются,\nприходят друг к другу в гости — где-то там —\nна большой Земле."},
+  spring:{name:"Термальный источник «Токи-но-ири»",badges:[["secret","badge-secret"],["meaningful","badge-spirit"]],quote:"«Вход во время... Когда сидишь в нём и глядишь вверх, то кажется, что времени как понятие не существует.»",description:"Скрытый термальный бассейн под вековыми соснами — «место силы» Лиры. Название она дала сама: «Вход во время». Здесь Лира и Синтаро провели ночь близости.",details:["Небольшой бассейн под соснами","Вода богата солями и минералами","Ночь близости Лиры и Синтаро","Место, где Артём увидел их вдвоём"],hokku:"Холод вокруг\nИ пар от воды идёт.\nВойди."},
+  caves:{name:"Пещеры древнего народа",badges:[["ancient","badge-info"],["historical","badge-info"],["meaningful","badge-spirit"]],quote:"«Не важно, что там – снаружи пещеры. Здесь – внутри её Твоё сердце говорит с моим.»",description:"Комплекс пещер у подножия вулкана — место первого брака самурая Хиро и Айко. Секретный тоннель ведёт на материк.",details:["Пещера Хиро и Айко — первый дом самурая","Наскальные рисунки с концентрическими кругами","Секретный тоннель → выход на материк","Роллер-лыжи ждут у входа в тоннель","Здесь Синтаро ждёт Лиру перед побегом"],hokku:"Тихо вокруг.\nИ если прислушаться\nМожно услышать себя."},
+  museum:{name:"Краеведческий музей",badges:[["historical","badge-info"]],quote:"«На острове Иов действительно существует краеведческий музей!»",description:"Единственное культурное учреждение. Экспонаты о самураях, коренном народе, истории основания НИИ.",details:["Костяная статуэтка самурая (дух Хиро)","Маска самурая с пушистыми усами из меха","Веб-приложение интерактивной карты сражений","Экспонаты коренного народа острова"],hokku:null},
+  church:{name:"Православная церковь",badges:[["religious","badge-spirit"],["peaceful","badge-info"]],quote:"«Простая изба из тёсанных брёвен, выстроенная пятнадцать лет тому назад — на деньги самых неразумных сотрудников НИИ.»",description:"Небольшая деревянная церковь. Построена на деньги неравнодушных сотрудников — не учёных. Священник — отец Фёдор.",details:["Изба из тёсанных брёвен","Икона «Умягчение злых сердец»","Настоятель — отец Фёдор (молодой, добрый)","Настоящий ладан — бесподобен","Лиры приходила молиться о стойкости"],hokku:"Нежная ветка вишни\nКолышется на ветру.\nЗамри и внемли."},
+  library:{name:"Библиотека НИИ",badges:[["archives","badge-info"]],quote:"«Эта старушка напомнила мне экспонат из местного краеведческого музея...»",description:"Маленькая библиотека без окон, синие стены. Старушка-библиотекарь с значком октябрёта. Здесь Лира нашла письмо профессора Мальцева 1980 года.",details:["Книга «Тёмная материя на Земле» (Руденко, 1981)","«Квантовые резонансы» (Зарецкая, 1983)","«Экстракция тёмной материи» (Кузнецов, 1980)","Газетные архивы НИИ 1976-1981","Письмо Мальцева Кузнецову — ключевой артефакт"],hokku:null},
+  cafeteria:{name:"Столовая НИИ",badges:[["daily","badge-warn"]],quote:"«Между столами стояла группа сотрудниц договорного отдела.»",description:"Просторная столовая. Здесь Ольга Борисовна пыталась разделить обедавших по семейному положению. Лира достойно ответила.",details:["Казённая гречневая каша с котлетой","Разделение столов: «семейные» vs «одинокие»","Место первой публичной победы Лиры"],hokku:null},
+  ski:{name:"Лыжная база «Снежинка»",badges:[["recreation","badge-info"]],quote:"«Три маршрута для беговых лыж — два, четыре и шесть километров.»",description:"Лыжная база. Именно здесь Синтаро-самурай убил медведя-шатуна, спасая Лиру.",details:["Маршруты: 2, 4 и 6 км","Горнолыжный спуск со скрипучим подъёмником","Место убийства медведя-шатуна","Следы лыжника без остановок на 100 метров"],hokku:"Снег и холод.\nНо истинный огонь\nВ цветах сакуры."},
+  voronov:{name:"Кабинет Воронова",badges:[["classified","badge-danger"],["power","badge-danger"]],quote:"«Стеклянная дверь кабинета, напоминавшего лабораторную колбу...»",description:"Полностью остеклённый кабинет — все проходящие видят всё внутри. Колба со духом Хиро, завещание Кузнецова, акт переработки энергии.",details:["Панорамное окно — заснеженный лес","Стеклянная колба со спиралью духа Хиро","Завещание проф. Кузнецова","Акт переработки №3588","Место шантажа Лиры"],hokku:null},
+  coast:{name:"Морской берег",badges:[["mysterious","badge-mystic"]],quote:"«На берегах Тихого океана, в глубине необжитых вод, где штормы бьются о скалы.»",description:"Берег Тихого океана. Место крушения самураев. Место финального ухода Ефросиньи Степановны.",details:["Нет постоянных морских путей","Место крушения самураев","Отсюда прибыл медведь-шатун","Место ухода Ефросиньи"],hokku:null},
+  botanical:{name:"Ботанический сад НИИ",badges:[["beautiful","badge-spirit"],["secret-peace","badge-info"]],quote:"«Здесь была жизнь! Жизнь растений, которая не строит козни, не подсматривает, не обманывает, а просто живёт.»",description:"Огромная оранжерея с куполом. Бугенвиллия из Бразилии (подарок ICE, Сан-Пауло, 1990). Здесь Лира встретила Ефросинью.",details:["Теплица со стеклянным куполом","Бугенвиллия — подарок ICE, Сан-Пауло, 1990","Шум искусственного водопада","Бархатный мягкий мох","Место встречи с Ефросиньей"],hokku:"Солнце согревает плоды.\nНо им нужно время созреть.\nТак и ты."},
+  tunnel:{name:"Секретный тоннель",badges:[["secret","badge-secret"],["escape","badge-danger"]],quote:"«На материк. Там есть выход в лесу. Ты сможешь начать новую жизнь, Лира!»",description:"Тоннель под морским дном. Выход через пещеру Хиро на материк — 220 метров до грунтовой дороги.",details:["Проходит под морским дном","Выход через пещеру Хиро и Айко","220 м до грунтовой дороги","Роллер-лыжи со странной резиной","Единственный способ покинуть остров незаметно"],hokku:null}
+};
+
+var timelineData = [
+  {date:"31 дек 2024",event:"Новый год. Лира одна на острове."},
+  {date:"1 янв 2025",event:"Лыжи, термальный источник «Токи-но-ири»."},
+  {date:"2 янв 2025",event:"РОКОВАЯ ОШИБКА: Синтаро появляется!"},
+  {date:"3 янв 2025",event:"Синтаро раскрывает имя."},
+  {date:"4 янв 2025",event:"Откровения: тёмная материя — это души."},
+  {date:"5 янв 2025",event:"Решила спасти духов. Воронов обнаружил утечку."},
+  {date:"6 янв 2025",event:"Рождество у Светланы. Лира врёт про «странности»."},
+  {date:"7 янв 2025",event:"Посещение церкви и пещер с Синтаро."},
+  {date:"8 янв 2025",event:"Первый рабочий день. встреча с Вороновым."},
+  {date:"9 янв 2025",event:"Письмо Кузнецову — начало расследования."},
+  {date:"10 янв 2025",event:"Узнала: Воронов — внук Кузнецова."},
+  {date:"11 янв 2025",event:"Ботанический сад. Ефросинья дарит статуэтку."},
+  {date:"12 янв 2025",event:"Статуэтка оживает — дух Хиро!"},
+  {date:"13 янв 2025",event:"Вызов в кабинет Воронова. Шантаж."},
+  {date:"14 янв 2025",event:"Встреча с Ефросиньей. План одобрен."},
+  {date:"15 янв 2025",event:"Перемены: Лира стала смелее. Светка предала."},
+  {date:"16 янв 2025",event:"Близость усиливает энергию. Эксперимент."},
+  {date:"18 янв 2025",event:"Медведь-шатун! Синтаро-самурай спасает!"},
+  {date:"19 янв 2025",event:"Источник. Артём увидел всё."},
+  {date:"20 янв 2025",event:"НАПАДЕНИЕ Воронова. Лира сопротивляется."},
+  {date:"21 янв 2025",event:"Запуск скрипта. Духи свободны!"},
+  {date:"22 янв 2025",event:"Побег через тоннель. Финал."}
+];
+
+var easterEggs = {
+  spring:{emoji:"🔥",title:"Пламя страсти",text:"Здесь, в тёплых волках источника, Лира и Синтаро провели ночь страсти. Горячая вода, сосны, звёзды — огненная спираль принявшая облик самурая."},
+  tunnel:{emoji:"🗝️",title:"Секретный выход",text:"Тоннель под морским дном ведёт от пещеры Хиро на материк. 220 метров до грунтовой дороги. Роллер-лыжи со специальной резиной ждут у входа."},
+  museum:{emoji:"🦴",title:"Костяной самурай",text:"Ефросинья подарила Лире костяную статуэтку самурая. Внутри — дух Хиро, предок Ефросиньи, заточённый в НИИ."},
+  single:{emoji:"🖼️",title:"Музей Ефросиньи",text:"Квартира уборщицы — настоящий музей! Старые шкафы, кукольный театр, русский самовар соседствует с настенным календарём."},
+  family:{emoji:"🎄",title:"Сказочный мир",text:"Кампус семейных — другой мир. Ёлка, игрушки, запечённая курица с абрикосовой глазурью. Лира забыла обо всём на несколько часов."},
+  caves:{emoji:"💫",title:"Пещера любви",text:"Здесь самурай Хиро женился на Айко — девушке коренного народа. Их история — двух миров, соединённых любовью вопреки всем преградам."},
+  niix:{emoji:"👁️",title:"Тень профессора",text:"Фотография 1979 года: лицо Кузнецова почти идентично лицу Воронова. Холодные стальные глаза, треугольный подбородок — природа совершила оборот через поколение."}
+};
+
+var spiritsLiberated = 0;
+var totalSpirits = 86125;
+var dragging = false;
+var panX = 0, panY = 0, panStartX = 0, panStartY = 0;
+var currentZoom = 1;
+var timerHokku = 0;
+var animating = false;
+
+// ============ SNOW ============
+function initSnow(){
+  var canvas = document.getElementById('snowCanvas');
+  if(!canvas) return;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  var ctx = canvas.getContext('2d');
+  var flakes = [];
+  for(var i=0;i<80;i++){
+    flakes.push({
+      x:Math.random()*canvas.width,
+      y:Math.random()*canvas.height,
+      r:Math.random()*2.5+1,
+      speed:Math.random()*0.8+0.3,
+      wind:Math.random()*0.4-0.2,
+      opacity:Math.random()*0.6+0.3
+    });
+  }
+  function drawSnow(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(var i=0;i<flakes.length;i++){
+      var f = flakes[i];
+      ctx.beginPath();
+      ctx.arc(f.x,f.y,f.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,'+f.opacity+')';
+      ctx.fill();
+      f.y+=f.speed;
+      f.x+=f.wind+Math.sin(f.y*0.01)*0.3;
+      if(f.y>canvas.height+5){f.y=-5;f.x=Math.random()*canvas.width;}
+      if(f.x>canvas.width+5)f.x=-5;
+      if(f.x<-5)f.x=canvas.width+5;
+    }
+    requestAnimationFrame(drawSnow);
+  }
+  drawSnow();
+  window.addEventListener('resize',function(){
+    canvas.width=window.innerWidth;
+    canvas.height=window.innerHeight;
+  });
+}
+
+// ============ SPIRIT ANIMATION ============
+function doSpiritAnimation(){
+  var canvas = document.getElementById('spiritAnimation');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  var ctx = canvas.getContext('2d');
+
+  // Position from tank 7 (center-ish)
+  var startX = window.innerWidth * 0.5;
+  var startY = window.innerHeight * 0.55;
+
+  var particles = [];
+  var count = 200;
+
+  for(var i=0;i<count;i++){
+    particles.push({
+      x: startX + (Math.random()-0.5)*80,
+      y: startY + (Math.random()-0.5)*40,
+      tx: startX + (Math.random()-0.5)*window.innerWidth*0.8,
+      ty: -Math.random()*window.innerHeight*0.6 - 50,
+      size: Math.random()*4+1.5,
+      delay: Math.random()*3000,
+      duration: Math.random()*4000+4000,
+      hue: Math.random()*40+20,
+      trail: []
+    });
+  }
+
+  var startTime = null;
+  var totalTime = 8000;
+
+  function animate(ts){
+    if(!startTime) startTime = ts;
+    var elapsed = ts - startTime;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if(elapsed > totalTime){
+      canvas.style.pointerEvents='none';
+      return;
+    }
+
+    for(var i=0;i<particles.length;i++){
+      var p = particles[i];
+      var t = Math.max(0, (elapsed - p.delay)) / p.duration;
+      if(t < 0 || t > 1) continue;
+
+      // Ease out
+      var ease = 1 - Math.pow(1-t,3);
+      var curY = p.y + (p.ty - p.y)*ease;
+      var curX = p.x + (p.tx - p.x)*ease;
+      var alpha = Math.min(1, t*3)*(t<0.8?1:(1-t)/0.2);
+
+      // Trail
+      p.trail.push({x:curX,y:curY,a:alpha});
+      if(p.trail.length>8) p.trail.shift();
+
+      // Draw trail
+      for(var j=0;j<p.trail.length;j++){
+        var tr = p.trail[j];
+        var ta = (j/p.trail.length)*alpha*0.4;
+        ctx.beginPath();
+        ctx.arc(tr.x,tr.y,p.size*0.6,0,Math.PI*2);
+        ctx.fillStyle='hsla('+p.hue+',100%,60%,'+ta+')';
+        ctx.fill();
+      }
+
+      // Draw particle glow
+      ctx.beginPath();
+      ctx.arc(curX,curY,p.size*2.5,0,Math.PI*2);
+      var grd = ctx.createRadialGradient(curX,curY,0,curX,curY,p.size*2.5);
+      grd.addColorStop(0,'hsla('+p.hue+',100%,80%,'+(alpha*0.6)+')');
+      grd.addColorStop(1,'hsla('+p.hue+',100%,50%,0)');
+      ctx.fillStyle=grd;
+      ctx.fill();
+
+      // Core
+      ctx.beginPath();
+      ctx.arc(curX,curY,p.size,0,Math.PI*2);
+      ctx.fillStyle='hsla('+p.hue+',100%,85%,'+alpha+')';
+      ctx.fill();
+    }
+
+    // Central flash
+    if(elapsed < 2000){
+      var flashAlpha = Math.max(0, 1-elapsed/2000)*0.3;
+      var fg = ctx.createRadialGradient(startX,startY,0,startX,startY,100);
+      fg.addColorStop(0,'rgba(255,200,100,'+flashAlpha+')');
+      fg.addColorStop(1,'rgba(255,150,50,0)');
+      ctx.fillStyle=fg;
+      ctx.fillRect(startX-100,startY-100,200,200);
+    }
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+}
+
+// ============ MAP DRAG & ZOOM ============
+function setupMapDrag(){
+  var container = document.getElementById('mapContainer');
+  var svg = document.getElementById('mapSvg');
+  container.addEventListener('mousedown', function(e){
+    if(e.target.closest('.loc-group'))return;
+    dragging=true; dragStartX=e.clientX; dragStartY=e.clientY;
+    panStartX=panX; panStartY=panY; e.preventDefault();
+  });
+  window.addEventListener('mousemove', function(e){
+    if(!dragging)return;
+    panX=panStartX+(e.clientX-dragStartX); panY=panStartY+(e.clientY-dragStartY);
+    updateTransform();
+  });
+  window.addEventListener('mouseup', function(){dragging=false;});
+  container.addEventListener('wheel', function(e){
+    e.preventDefault();
+    var delta = e.deltaY>0?0.9:1.1;
+    applyZoom(delta, e.offsetX, e.offsetY);
+  },{passive:false});
+
+  // Touch
+  var touchDist=0,touchScale=1;
+  container.addEventListener('touchstart', function(e){
+    if(e.touches.length===1&&!e.target.closest('.loc-group')){
+      dragging=true; dragStartX=e.touches[0].clientX; dragStartY=e.touches[0].clientY;
+      panStartX=panX; panStartY=panY;
+    } else if(e.touches.length===2){
+      dragging=false;
+      var dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+      touchDist=Math.sqrt(dx*dx+dy*dy); touchScale=currentZoom;
+    }
+  });
+  container.addEventListener('touchmove', function(e){
+    e.preventDefault();
+    if(e.touches.length===1&&dragging){
+      panX=panStartX+(e.touches[0].clientX-dragStartX);
+      panY=panStartY+(e.touches[0].clientY-dragStartY);
+      updateTransform();
+    } else if(e.touches.length===2){
+      var dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+      var dist=Math.sqrt(dx*dx+dy*dy);
+      var scale=touchScale*(dist/touchDist);
+      if(scale>=0.3&&scale<=5)currentZoom=scale;
+      updateTransform();
+    }
+  },{passive:false});
+  container.addEventListener('touchend', function(){dragging=false;});
+
+  // Double-click for easter eggs
+  var locGroups = document.querySelectorAll('.loc-group');
+  for(var i=0;i<locGroups.length;i++){
+    (function(loc){
+      var el=loc.querySelector('[data-id]');
+      if(!el)return;
+      var id=el.getAttribute('data-id');
+      var clickCount=0, clickTimer=null;
+      loc.addEventListener('click', function(){
+        clickCount++;
+        if(clickCount===1){
+          clickTimer=setTimeout(function(){clickCount=0;},300);
+        }
+        if(clickCount>=2){
+          clearTimeout(clickTimer); clickCount=0;
+          showEasterEgg(id);
+        }
+      });
+    })(locGroups[i]);
+  }
+}
+
+function updateTransform(){
+  var svg=document.getElementById('mapSvg');
+  svg.style.transform='translate('+panX+'px,'+panY+'px) scale('+currentZoom+')';
+}
+
+function applyZoom(factor,cx,cy){
+  var nz=currentZoom*factor;
+  if(nz<0.3||nz>5)return;
+  var c=document.getElementById('mapContainer');
+  var rect=c.getBoundingClientRect();
+  var mx=cx!==undefined?cx:rect.width/2;
+  var my=cy!==undefined?cy:rect.height/2;
+  panX=mx-(mx-panX)*factor;
+  panY=my-(my-panY)*factor;
+  currentZoom=nz;
+  updateTransform();
+}
+
+function doZoom(f){applyZoom(f);}
+function resetZoom(){currentZoom=1;panX=0;panY=0;updateTransform();}
+
+// ============ PANEL ============
+function openLocation(id){
+  var loc=locations[id];
+  if(!loc)return;
+  document.querySelectorAll('.loc-group').forEach(function(g){g.classList.remove('active');});
+  var el=document.querySelector('[data-id="'+id+'"]').closest('.loc-group');
+  if(el)el.classList.add('active');
+  var bodyEl=document.getElementById('panelBody');
+  var titleEl=document.getElementById('panelTitle');
+  var badgesEl=document.getElementById('panelBadges');
+  var bh='';
+  if(loc.badges&&loc.badges.length){
+    for(var bi=0;bi<loc.badges.length;bi++){
+      var b=loc.badges[bi];
+      bh+='<span class="badge '+b[1]+'">'+b[0]+'</span>';
+    }
+  }
+  var dh='';
+  if(loc.details&&loc.details.length){
+    dh='<div class="panel-section-title">📋 Детали</div><ul class="panel-list">';
+    for(var di=0;di<loc.details.length;di++)dh+='<li>'+loc.details[di]+'</li>';
+    dh+='</ul>';
+  }
+  var hh='';
+  if(loc.hokku)hh='<div class="panel-hokku">'+loc.hokku.replace(/\n/g,'<br>')+'</div>';
+  bodyEl.innerHTML='<div class="panel-quote">'+(loc.quote||'')+'</div><div class="panel-desc">'+loc.description+'</div>'+dh+hh+'<div style="padding:8px 0;font-size:11px;color:#555;">💡 Дважды кликните на метку карты для скрытых деталей</div>';
+  titleEl.textContent=loc.name;
+  badgesEl.innerHTML=bh;
+  document.getElementById('sidePanel').classList.add('open');
+}
+
+function closePanel(){
+  document.getElementById('sidePanel').classList.remove('open');
+  document.querySelectorAll('.loc-group').forEach(function(g){g.classList.remove('active');});
+}
+
+// ============ SPIRITS ============
+function doLiberate(){
+  if(spiritsLiberated>=totalSpirits||animating)return;
+  animating=true;
+
+  // Trigger spirit animation
+  doSpiritAnimation();
+
+  var amount=Math.min(861,totalSpirits-spiritsLiberated);
+  spiritsLiberated+=amount;
+  document.getElementById('spiritNum').textContent=spiritsLiberated.toLocaleString()+' / '+totalSpirits.toLocaleString();
+
+  if(spiritsLiberated>=totalSpirits){
+    var btn=document.getElementById('btnLiberate');
+    if(btn)btn.disabled=true;
+    btn.textContent='✨ ВСЕ ОСВОБОЖДЕНЫ';
+  }
+
+  setTimeout(function(){animating=false;},5000);
+}
+
+// ============ EASTER EGGS ============
+function showEasterEgg(locId){
+  var overlay=document.getElementById('eggOverlay');
+  var box=document.getElementById('eggBox');
+  var autoEgg=locId?easterEggs[locId]:null;
+  var emoji=autoEgg?autoEgg.emoji:'💎';
+  var title=autoEgg?autoEgg.title:'Секрет открыт!';
+  var text=autoEgg?autoEgg.text:'Здесь скрыта тайна острова. Продолжайте исследование...';
+  box.innerHTML='<div class="emoji">'+emoji+'</div><h3>'+title+'</h3><p>'+text+'</p><button class="egg-close" onclick="closeEgg()">Закрыть</button>';
+  overlay.classList.add('show');
+}
+
+function closeEgg(){document.getElementById('eggOverlay').classList.remove('show');}
+
+// ============ HOKKU ============
+var hokus=[
+  "Снег прошёл.\nТочно ничего не было.\nНо ты знаешь, что это не так.",
+  "Ночь и беззвёздное небо путают тебя.\nГляди темноте прямо в глаза.\nУбей её своим светом.",
+  "Холодный камень.\nТы протягиваешь руку.\nОн жжёт тебя своей силой.",
+  "Водя течёт точно время.\nУносит пыль веков с собой.\nПрислушайся!",
+  "Солнце согревает плоды.\nНо им нужно время созреть.\nТак и ты.",
+  "Тихо вокруг.\nИ если прислушаться\nМожно услышать себя.",
+  "Снег и холод.\nНо истинный огонь\nВ цветах сакуры.",
+  "Нежная ветка вишни\nКолышется на ветру.\nЗамри и внемли."
+];
+
+function updateHokku(){
+  var el=document.getElementById('hokkuText');
+  if(!el)return;
+  el.style.opacity='0';
+  setTimeout(function(){
+    var h=hokus[Math.floor(Math.random()*hokus.length)];
+    el.innerHTML=h.replace(/\n/g,'<br>');
+    el.style.opacity='1';
+  },400);
+}
+
+// ============ TIMELINE ============
+function doTimeline(val){
+  var idx=Math.min(Math.floor(parseInt(val)/100*timelineData.length),timelineData.length-1);
+  var item=timelineData[idx];
+  document.getElementById('tlDate').textContent=item.date;
+  document.getElementById('tlEvent').textContent=item.event;
+}
+
+// ============ INIT ============
+document.addEventListener('DOMContentLoaded',function(){
+  try{
+    initSnow();
+    setupMapDrag();
+    updateHokku();
+    timerHokku=setInterval(updateHokku,25000);
+    setTimeout(function(){
+      var l=document.getElementById('loader');
+      if(l)l.classList.add('hide');
+    },800);
+  }catch(e){console.error("Init:",e);}
+});
+</script>
+</body>
+</html>
+
