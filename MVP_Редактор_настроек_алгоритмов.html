@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>НИИ «Предельные Энергии» — Редактор настроек алгоритма</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #111820;
+            --bg-tertiary: #1a2332;
+            --bg-card: #1e293b;
+            --border-color: #2d3748;
+            --border-accent: #4a5568;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-orange: #f97316;
+            --accent-gold: #eab308;
+            --accent-blue: #3b82f6;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-plasma: #a855f7;
+            --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            font-size: 14px;
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-container {
+            display: grid;
+            grid-template-rows: 56px 1fr 28px;
+            height: 100%;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-orange), var(--accent-gold), transparent);
+            opacity: 0.6;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-orange), var(--accent-gold));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--bg-primary);
+            box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+        }
+
+        .header-title {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+        }
+
+        .header-subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+        }
+
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-plasma));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .user-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .user-role {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr 400px;
+            overflow: hidden;
+        }
+
+        .left-panel {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tree-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .tree-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-add {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .btn-add:hover {
+            background: #16a34a;
+        }
+
+        .tree-node {
+            margin-left: 18px;
+            position: relative;
+        }
+
+        .tree-node::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--border-color);
+        }
+
+        .tree-node:first-child { margin-left: 0; }
+        .tree-node:first-child::before { display: none; }
+
+        .tree-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            border: 1px solid transparent;
+            margin: 2px 0;
+            background: var(--bg-secondary);
+        }
+
+        .tree-item:hover {
+            background: var(--bg-card);
+            border-color: var(--border-color);
+        }
+
+        .tree-item.selected {
+            background: var(--bg-card);
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 12px rgba(249, 115, 22, 0.15);
+            color: var(--accent-gold);
+        }
+
+        .tree-item.drag-over {
+            border-top: 2px solid var(--accent-gold);
+        }
+
+        .tree-icon {
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .tree-label {
+            flex: 1;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+
+        .tree-type {
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            background: rgba(100, 116, 139, 0.2);
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .type-module { background: rgba(168, 85, 247, 0.15); color: var(--accent-plasma); }
+        .type-algorithm { background: rgba(249, 115, 22, 0.15); color: var(--accent-orange); }
+        .type-block { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+
+        .tree-actions-row {
+            display: flex;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+
+        .tree-btn {
+            width: 22px;
+            height: 22px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+
+        .tree-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .tree-btn.delete:hover {
+            color: var(--accent-red);
+        }
+
+        .drag-handle {
+            cursor: grab;
+            color: var(--text-muted);
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .tree-item:hover .drag-handle {
+            opacity: 0.6;
+        }
+
+        .center-panel {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-primary);
+            overflow: hidden;
+        }
+
+        .tabs-container {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+        }
+
+        .tab {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+            user-select: none;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .tab.active {
+            color: var(--accent-orange);
+            border-bottom-color: var(--accent-orange);
+            background: var(--bg-tertiary);
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tab-pane {
+            position: absolute;
+            inset: 0;
+            overflow: auto;
+            padding: 20px;
+            transition: opacity 0.2s;
+        }
+
+        .tab-pane.hidden { 
+            opacity: 0; 
+            pointer-events: none; 
+            z-index: -1;
+        }
+
+        .params-container {
+            width: 100%;
+        }
+
+        .params-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .params-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .params-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .params-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+        }
+
+        .params-table tr:hover td {
+            background: var(--bg-secondary);
+        }
+
+        .param-input {
+            width: 100%;
+            padding: 6px 10px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: var(--font-sans);
+        }
+
+        .param-input:focus {
+            outline: none;
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+        }
+
+        .param-select {
+            padding: 6px 10px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: var(--font-sans);
+        }
+
+        .action-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.15s;
+        }
+
+        .action-btn:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .action-btn.save:hover { color: var(--accent-green); }
+        .action-btn.cancel:hover { color: var(--accent-gold); }
+        .action-btn.edit:hover { color: var(--accent-blue); }
+        .action-btn.delete:hover { color: var(--accent-red); }
+
+        .svg-container {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
+            background-size: 24px 24px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .svg-container:active { cursor: grabbing; }
+
+        .right-panel {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: var(--font-sans);
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+        }
+
+        .select-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: var(--font-sans);
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: var(--font-sans);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-orange), #ea580c);
+            color: white;
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(249, 115, 22, 0.35);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-orange);
+            background: var(--bg-tertiary);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--accent-green), #16a34a);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
+        }
+
+        .btn-full { width: 100%; margin-top: 12px; }
+
+        .block-params-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .block-param-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .block-param-name {
+            color: var(--accent-gold);
+        }
+
+        .block-param-type {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-blue);
+            margin-top: 4px;
+            display: inline-block;
+        }
+
+        .preview-block {
+            margin-top: 20px;
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .preview-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .preview-field {
+            margin-bottom: 12px;
+        }
+
+        .preview-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .preview-input {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: var(--font-sans);
+        }
+
+        .preview-switch {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .switch.active {
+            background: var(--accent-orange);
+            border-color: var(--accent-orange);
+        }
+
+        .switch-knob {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .switch.active .switch-knob {
+            left: 22px;
+        }
+
+        .switch-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .switch-hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 480px;
+            max-height: 80vh;
+            overflow: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 14px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .code-preview {
+            margin-top: 16px;
+            padding: 14px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--accent-green);
+            max-height: 250px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .empty-text {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .section-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 18px 0;
+        }
+
+        .status-bar {
+            padding: 0 16px;
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border-color);
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 28px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+        }
+
+        .scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .scrollbar::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        .scrollbar::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        .algorithm-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="app-container">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <div class="header-logo">ПЭ</div>
+                    <div>
+                        <div class="header-title">Редактор настроек алгоритма</div>
+                        <div class="header-subtitle">НИИ «Предельные Энергии» • Модуль управления экстракцией</div>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="user-badge">
+                        <div class="user-avatar">ЛА</div>
+                        <div class="user-info">
+                            <div class="user-name">Амалова Лира</div>
+                            <div class="user-role">Программист высшей категории</div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Left Panel - Tree -->
+                <aside class="left-panel">
+                    <div class="panel-header">
+                        <span>Иерархия модуля</span>
+                        <div class="tree-actions">
+                            <button class="btn-small btn-add" @click="addModule">+ Модуль</button>
+                            <button class="btn-small btn-add" style="background: var(--accent-orange)" @click="addAlgorithm">+ Алгоритм</button>
+                        </div>
+                    </div>
+                    <div class="tree-container scrollbar">
+                        <div v-for="(module, mi) in data.modules" :key="module.id" class="tree-node" style="margin-left: 0">
+                            <div class="tree-item" :class="{ selected: selectedNode?.id === module.id }" @click="selectNode(module)">
+                                <div class="tree-icon">📦</div>
+                                <span class="tree-label">{{ module.label }}</span>
+                                <span class="tree-type type-module">{{ module.type }}</span>
+                                <div class="tree-actions-row">
+                                    <button class="tree-btn" @click.stop="addBlockToModule(module)" title="Добавить алгоритм">+</button>
+                                    <button class="tree-btn delete" @click.stop="deleteNode(module)" title="Удалить">×</button>
+                                </div>
+                            </div>
+                            <template v-if="module.algorithms?.length">
+                                <div v-for="(alg, ai) in module.algorithms" :key="alg.id" class="tree-node">
+                                    <div class="tree-item" :class="{ selected: selectedNode?.id === alg.id }" @click="selectNode(alg)">
+                                        <div class="tree-icon">⚡</div>
+                                        <span class="tree-label">{{ alg.label }}</span>
+                                        <span class="tree-type type-algorithm">{{ alg.type }}</span>
+                                        <div class="tree-actions-row">
+                                            <button class="tree-btn" @click.stop="addBlockToAlgorithm(alg)" title="Добавить блок">+</button>
+                                            <button class="tree-btn delete" @click.stop="deleteNode(alg)" title="Удалить">×</button>
+                                        </div>
+                                    </div>
+                                    <div v-if="alg.blocks?.length">
+                                        <div v-for="(block, bi) in alg.blocks" :key="block.id" 
+                                             class="tree-node"
+                                             draggable="true"
+                                             @dragstart="onDragStart($event, alg, bi)"
+                                             @dragover.prevent
+                                             @drop="onDrop($event, alg, bi)">
+                                            <div class="tree-item" :class="{ selected: selectedNode?.id === block.id }" @click="selectNode(block)">
+                                                <span class="drag-handle">⋮⋮</span>
+                                                <div class="tree-icon">🔷</div>
+                                                <span class="tree-label">{{ block.label }}</span>
+                                                <span class="tree-type type-block">{{ block.type }}</span>
+                                                <div class="tree-actions-row">
+                                                    <button class="tree-btn delete" @click.stop="deleteNode(block)" title="Удалить">×</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Center Panel -->
+                <main class="center-panel">
+                    <div class="tabs-container">
+                        <div class="tab" :class="{ active: activeTab === 'params' }" @click="activeTab = 'params'">Параметры алгоритма</div>
+                        <div class="tab" :class="{ active: activeTab === 'schema' }" @click="activeTab = 'schema'">SVG Блок-схема</div>
+                    </div>
+                    <div class="tab-content">
+                        <!-- Params Tab -->
+                        <div class="tab-pane" :class="{ hidden: activeTab !== 'params' }">
+                            <template v-if="selectedNode?.type === 'Алгоритм'">
+                                <div class="params-container">
+                                    <div class="params-header">
+                                        <span class="params-title">Параметры алгоритма</span>
+                                        <button class="btn btn-primary" style="padding: 6px 14px; font-size: 13px" @click="addAlgorithmParam">+ Добавить параметр</button>
+                                    </div>
+                                    <table class="params-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 20%">Ключ</th>
+                                                <th style="width: 15%">Тип</th>
+                                                <th style="width: 20%">Значение</th>
+                                                <th style="width: 35%">Описание</th>
+                                                <th style="width: 10%">Действия</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template v-for="(param, idx) in selectedNode.params" :key="param.id">
+                                                <tr v-if="editingParamIdx !== idx">
+                                                    <td><span style="color: var(--accent-gold)">{{ param.key }}</span></td>
+                                                    <td>
+                                                        <span style="color: var(--accent-blue); font-size: 13px; padding: 3px 8px; background: rgba(59, 130, 246, 0.1); border-radius: 4px">{{ param.type }}</span>
+                                                    </td>
+                                                    <td style="color: var(--accent-green)">{{ param.value }}</td>
+                                                    <td style="color: var(--text-secondary)">{{ param.description }}</td>
+                                                    <td>
+                                                        <button class="action-btn edit" @click="startEditParam(idx)" title="Редактировать">✏️</button>
+                                                        <button class="action-btn delete" @click="deleteAlgorithmParam(idx)" title="Удалить">🗑️</button>
+                                                    </td>
+                                                </tr>
+                                                <tr v-else style="background: var(--bg-tertiary)">
+                                                    <td><input class="param-input" v-model="editingParam.key" placeholder="key"></td>
+                                                    <td>
+                                                        <select class="param-select" v-model="editingParam.type">
+                                                            <option value="string">Строка</option>
+                                                            <option value="number">Число</option>
+                                                            <option value="boolean">Логический</option>
+                                                        </select>
+                                                    </td>
+                                                    <td><input class="param-input" v-model="editingParam.value"></td>
+                                                    <td><input class="param-input" v-model="editingParam.description" placeholder="Описание..."></td>
+                                                    <td>
+                                                        <button class="action-btn save" @click="saveParamEdit(idx)" title="Сохранить">✓</button>
+                                                        <button class="action-btn cancel" @click="cancelParamEdit" title="Отмена">✕</button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <tr v-if="selectedNode.params.length === 0">
+                                                <td colspan="5" style="text-align: center; padding: 30px; color: var(--text-muted)">Нет параметров. Нажмите «+ Добавить параметр»</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </template>
+                            <div v-else class="empty-state">
+                                <div class="empty-icon">📋</div>
+                                <div class="empty-text">Выберите алгоритм для просмотра параметров</div>
+                            </div>
+                        </div>
+
+                        <!-- Schema Tab -->
+                        <div class="tab-pane" :class="{ hidden: activeTab !== 'schema' }">
+                            <template v-if="selectedNode?.type === 'Алгоритм'">
+                                <div class="svg-container" ref="svgContainer"></div>
+                            </template>
+                            <div v-else class="empty-state">
+                                <div class="empty-icon">🔗</div>
+                                <div class="empty-text">Выберите алгоритм для просмотра блок-схемы</div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+
+                <!-- Right Panel -->
+                <aside class="right-panel">
+                    <div class="panel-header">
+                        <span>Свойства: {{ selectedNode?.label || 'Не выбрано' }}</span>
+                    </div>
+                    <div class="panel-scroll scrollbar" v-if="selectedNode">
+                        <!-- Block Settings -->
+                        <template v-if="selectedNode.type === 'Блок'">
+                            <div class="form-group">
+                                <label class="form-label">Заголовок блока</label>
+                                <input class="form-input" v-model="selectedNode.label" placeholder="Название блока">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Подпись на схеме</label>
+                                <input class="form-input" v-model="selectedNode.schemaLabel" placeholder="Текст в блоке на схеме">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Следующий блок</label>
+                                <select class="select-input" v-model="selectedNode.nextBlockId">
+                                    <option :value="null">— Конец цепочки —</option>
+                                    <option v-for="b in getAllBlocksExceptCurrent" :key="b.id" :value="b.id">{{ b.label }}</option>
+                                </select>
+                            </div>
+
+                            <div class="section-divider"></div>
+
+                            <div class="form-group">
+                                <label class="form-label">Параметры блока</label>
+                                <button class="btn btn-secondary btn-full" @click="openAddParamModal">
+                                    <span>+</span> Добавить параметр
+                                </button>
+                            </div>
+
+                            <div class="block-params-list" v-if="selectedNode.params.length">
+                                <div class="block-param-item" v-for="(param, idx) in selectedNode.params" :key="param.id">
+                                    <div>
+                                        <div class="block-param-name">{{ param.key }}</div>
+                                        <div class="block-param-type">{{ param.controlType === 'toggle' ? 'Переключатель' : 'Текстовое поле' }}</div>
+                                    </div>
+                                    <div style="display: flex; gap: 4px">
+                                        <button class="action-btn edit" @click="editParam(param)" style="width:24px;height:24px;font-size:14px">✏️</button>
+                                        <button class="action-btn delete" @click="removeBlockParam(idx)" style="width:24px;height:24px;font-size:14px">🗑️</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="section-divider"></div>
+
+                            <div class="form-group">
+                                <label class="form-label">Предпросмотр блока</label>
+                                <div class="preview-block">
+                                    <div class="preview-title">{{ selectedNode.schemaLabel || selectedNode.label }}</div>
+                                    <div v-for="param in selectedNode.params" :key="param.id" class="preview-field">
+                                        <template v-if="param.controlType === 'toggle'">
+                                            <div class="preview-switch">
+                                                <div class="switch" :class="{ active: param.value }" @click="param.value = !param.value">
+                                                    <div class="switch-knob"></div>
+                                                </div>
+                                                <div>
+                                                    <div class="switch-label">{{ param.label }}</div>
+                                                    <div class="switch-hint" v-if="param.hint">{{ param.hint }}</div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template v-else>
+                                            <div class="preview-label">{{ param.label }}</div>
+                                            <input class="preview-input" v-model="param.value" placeholder="Значение...">
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-success btn-full" @click="generateBlockHTML">
+                                <span>📄</span> Генерировать HTML блока
+                            </button>
+                            <div class="code-preview" v-if="generatedHTML">{{ generatedHTML }}</div>
+                        </template>
+
+                        <!-- Algorithm Settings -->
+                        <template v-else-if="selectedNode.type === 'Алгоритм'">
+                            <div class="form-group">
+                                <label class="form-label">Название алгоритма</label>
+                                <input class="form-input" v-model="selectedNode.label">
+                            </div>
+
+                            <div class="section-divider"></div>
+
+                            <div class="algorithm-actions">
+                                <button class="btn btn-success" @click="generateAlgorithmHTML" style="flex: 1">
+                                    <span>📄</span> HTML группы
+                                </button>
+                                <button class="btn btn-primary" @click="exportJSON" style="flex: 1">
+                                    <span>💾</span> Экспорт JSON
+                                </button>
+                            </div>
+
+                            <div class="form-group" style="margin-top: 14px">
+                                <label class="form-label">Предпросмотр группы алгоритма</label>
+                                <div class="preview-block">
+                                    <div class="preview-title">{{ selectedNode.label }}</div>
+                                    <div v-for="block in selectedNode.blocks" :key="block.id" style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color)">
+                                        <div style="font-size: 14px; font-weight: 600; color: var(--accent-orange); margin-bottom: 8px">{{ block.schemaLabel || block.label }}</div>
+                                        <div v-for="param in block.params" :key="param.id" class="preview-field" style="margin-bottom: 8px">
+                                            <template v-if="param.controlType === 'toggle'">
+                                                <div class="preview-switch">
+                                                    <div class="switch" :class="{ active: param.value }">
+                                                        <div class="switch-knob"></div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="switch-label">{{ param.label }}</div>
+                                                        <div class="switch-hint" v-if="param.hint">{{ param.hint }}</div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template v-else>
+                                                <div class="preview-label">{{ param.label }}</div>
+                                                <input class="preview-input" v-model="param.value" style="font-size: 14px; padding: 6px 10px">
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="code-preview" v-if="generatedAlgorithmHTML">{{ generatedAlgorithmHTML }}</div>
+                        </template>
+
+                        <template v-else>
+                            <div class="empty-state">
+                                <div class="empty-icon">⚙️</div>
+                                <div class="empty-text">Выберите блок или алгоритм для настройки</div>
+                            </div>
+                        </template>
+                    </div>
+                </aside>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Система активна</span>
+                </div>
+                <div class="status-item">
+                    <span>Проект «Созвездие» • Резервуар №7</span>
+                </div>
+                <div class="status-item">
+                    <span>НИИ «Предельные Энергии» • Остров Иов</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add/Edit Param Modal -->
+        <div class="modal-overlay" v-if="showAddParamModal" @click.self="closeModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <div class="modal-title">{{ isEditingParam ? 'Редактировать параметр' : 'Добавить параметр' }}</div>
+                    <button class="modal-close" @click="closeModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Ключ параметра</label>
+                        <input class="form-input" v-model="newParam.key" placeholder="например, scan_frequency">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Подпись</label>
+                        <input class="form-input" v-model="newParam.label" placeholder="Частота сканирования">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Тип элемента управления</label>
+                        <select class="select-input" v-model="newParam.controlType">
+                            <option value="text">Текстовое поле</option>
+                            <option value="toggle">Переключатель</option>
+                        </select>
+                    </div>
+                    <template v-if="newParam.controlType === 'text'">
+                        <div class="form-group">
+                            <label class="form-label">Значение по умолчанию</label>
+                            <input class="form-input" v-model="newParam.value">
+                        </div>
+                    </template>
+                    <template v-if="newParam.controlType === 'toggle'">
+                        <div class="form-group">
+                            <label class="form-label">Текст подсказки</label>
+                            <input class="form-input" v-model="newParam.hint" placeholder="Описание параметра">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Начальное состояние</label>
+                            <select class="select-input" v-model="newParam.value">
+                                <option :value="true">Включено</option>
+                                <option :value="false">Выключено</option>
+                            </select>
+                        </div>
+                    </template>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @click="closeModal">Отмена</button>
+                    <button class="btn btn-primary" @click="saveBlockParam">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const activeTab = ref('params');
+                const selectedNode = ref(null);
+                const showAddParamModal = ref(false);
+                const generatedHTML = ref('');
+                const generatedAlgorithmHTML = ref('');
+                const svgContainer = ref(null);
+                const isEditingParam = ref(false);
+                const editingBlockParamIndex = ref(-1);
+                const editingParamIdx = ref(-1);
+                const editingParam = reactive({ key: '', type: 'string', value: '', description: '' });
+                const newParam = reactive({ key: '', label: '', controlType: 'text', value: '', hint: '' });
+
+                let idCounter = 100;
+                const nextId = (prefix = 'id') => `${prefix}_${++idCounter}`;
+
+                const data = reactive({
+                    modules: [{
+                        id: 'mod_1',
+                        type: 'Модуль',
+                        label: 'Модуль экстракции',
+                        algorithms: [{
+                            id: 'alg_1',
+                            type: 'Алгоритм',
+                            label: 'Алгоритм экстракции основной',
+                            params: [
+                                { id: 'p1', key: 'scan_mode', type: 'string', value: 'resonance', description: 'Режим сканирования биополя' },
+                                { id: 'p2', key: 'power_level', type: 'number', value: 85, description: 'Уровень мощности экстракции (0-100)' },
+                                { id: 'p3', key: 'container_type', type: 'string', value: 'glass_stabilized', description: 'Тип стабилизирующей колбы' },
+                                { id: 'p4', key: 'auto_shutdown', type: 'boolean', value: true, description: 'Автоматическое отключение после завершения цикла' },
+                                { id: 'p5', key: 'frequency_range', type: 'string', value: '0.7-13.4 ТМ', description: 'Диапазон резонансного сканирования' },
+                                { id: 'p6', key: 'operator_boost', type: 'boolean', value: true, description: 'Усиление захвата колебаниями биополя оператора' }
+                            ],
+                            blocks: [
+                                {
+                                    id: 'blk_1', type: 'Блок', label: 'Блок инициализации', schemaLabel: 'Инициализация экстракции',
+                                    nextBlockId: 'blk_2',
+                                    params: [
+                                        { id: 'b1p1', key: 'startup_delay', label: 'Задержка запуска', controlType: 'text', value: '3000', hint: '' },
+                                        { id: 'b1p2', key: 'warmup_required', label: 'Требуется прогрев', controlType: 'toggle', value: true, hint: 'Прогрев ламп перед началом экстракции' }
+                                    ]
+                                },
+                                {
+                                    id: 'blk_2', type: 'Блок', label: 'Блок сканирования', schemaLabel: 'Резонансное сканирование',
+                                    nextBlockId: 'blk_3',
+                                    params: [
+                                        { id: 'b2p1', key: 'scan_steps', label: 'Количество шагов', controlType: 'text', value: '64', hint: '' },
+                                        { id: 'b2p2', key: 'signal_filter', label: 'Фильтр сигнала', controlType: 'toggle', value: true, hint: 'Фильтрация посторонних электромагнитных шумов' },
+                                        { id: 'b2p3', key: 'threshold', label: 'Порог обнаружения', controlType: 'text', value: '0.85', hint: '' }
+                                    ]
+                                },
+                                {
+                                    id: 'blk_3', type: 'Блок', label: 'Блок стабилизации', schemaLabel: 'Стабилизация сгустка',
+                                    nextBlockId: null,
+                                    params: [
+                                        { id: 'b3p1', key: 'stabilize_time', label: 'Время стабилизации', controlType: 'text', value: '5000', hint: 'мс' },
+                                        { id: 'b3p2', key: 'lock_container', label: 'Блокировка колбы', controlType: 'toggle', value: true, hint: 'Автоматическая блокировка после заполнения' }
+                                    ]
+                                }
+                            ]
+                        }]
+                    }]
+                });
+
+                const getAllBlocksExceptCurrent = computed(() => {
+                    if (!selectedNode.value || selectedNode.value.type !== 'Блок') return [];
+                    const alg = findParentAlgorithm(selectedNode.value);
+                    if (!alg) return [];
+                    return alg.blocks.filter(b => b.id !== selectedNode.value.id);
+                });
+
+                function findParentAlgorithm(node) {
+                    for (const mod of data.modules) {
+                        for (const alg of mod.algorithms) {
+                            if (alg === node) return alg;
+                            if (alg.blocks?.includes(node)) return alg;
+                        }
+                    }
+                    return null;
+                }
+
+                const selectNode = (node) => {
+                    selectedNode.value = node;
+                    generatedHTML.value = '';
+                    generatedAlgorithmHTML.value = '';
+                    if (node.type === 'Алгоритм') {
+                        activeTab.value = 'schema';
+                        nextTick(() => setTimeout(renderSchema, 80));
+                    } else if (node.type === 'Блок') {
+                        activeTab.value = 'params';
+                        nextTick(() => renderSchema());
+                    } else {
+                        activeTab.value = 'params';
+                    }
+                };
+
+                const addModule = () => {
+                    const newMod = { id: nextId('mod'), type: 'Модуль', label: 'Новый модуль', algorithms: [] };
+                    data.modules.push(newMod);
+                    selectNode(newMod);
+                };
+
+                const addAlgorithm = () => {
+                    const target = data.modules.length > 0 ? data.modules[data.modules.length - 1] : null;
+                    const newAlg = { id: nextId('alg'), type: 'Алгоритм', label: 'Новый алгоритм', params: [], blocks: [] };
+                    if (target) {
+                        target.algorithms.push(newAlg);
+                    } else {
+                        data.modules.push({ id: nextId('mod'), type: 'Модуль', label: 'Новый модуль', algorithms: [newAlg] });
+                    }
+                    selectNode(newAlg);
+                };
+
+                const addBlockToModule = (module) => {
+                    const newAlg = { id: nextId('alg'), type: 'Алгоритм', label: 'Новый алгоритм', params: [], blocks: [] };
+                    module.algorithms.push(newAlg);
+                    selectNode(newAlg);
+                };
+
+                const addBlockToAlgorithm = (alg) => {
+                    const prevBlock = alg.blocks.length > 0 ? alg.blocks[alg.blocks.length - 1] : null;
+                    const newBlk = {
+                        id: nextId('blk'), type: 'Блок', label: 'Новый блок', schemaLabel: 'Новый блок',
+                        nextBlockId: null,
+                        params: []
+                    };
+                    if (prevBlock) prevBlock.nextBlockId = newBlk.id;
+                    alg.blocks.push(newBlk);
+                    selectNode(newBlk);
+                };
+
+                const deleteNode = (node) => {
+                    if (!confirm(`Удалить «${node.label}»?`)) return;
+
+                    // Remove from modules
+                    const mi = data.modules.findIndex(m => m.id === node.id);
+                    if (mi > -1) {
+                        data.modules.splice(mi, 1);
+                        selectedNode.value = null;
+                        return;
+                    }
+
+                    // Remove from algorithms in modules
+                    for (const mod of data.modules) {
+                        const ai = mod.algorithms.findIndex(a => a.id === node.id);
+                        if (ai > -1) {
+                            mod.algorithms.splice(ai, 1);
+                            if (selectedNode.value?.id === node.id) selectedNode.value = null;
+                            return;
+                        }
+                        // Remove blocks
+                        for (const alg of mod.algorithms) {
+                            const bi = alg.blocks.findIndex(b => b.id === node.id);
+                            if (bi > -1) {
+                                alg.blocks.splice(bi, 1);
+                                if (selectedNode.value?.id === node.id) selectedNode.value = null;
+                                return;
+                            }
+                        }
+                    }
+                };
+
+                const dragging = { alg: null, fromIdx: -1 };
+
+                const onDragStart = (event, alg, idx) => {
+                    dragging.alg = alg;
+                    dragging.fromIdx = idx;
+                    event.dataTransfer.effectAllowed = 'move';
+                };
+
+                const onDrop = (event, alg, toIdx) => {
+                    if (dragging.alg !== alg || dragging.fromIdx === toIdx) return;
+                    const blocks = alg.blocks;
+                    const [moved] = blocks.splice(dragging.fromIdx, 1);
+                    blocks.splice(toIdx, 0, moved);
+                    // Update chain
+                    for (let i = 0; i < blocks.length - 1; i++) {
+                        blocks[i].nextBlockId = blocks[i + 1].id;
+                    }
+                    if (blocks.length > 0) {
+                        blocks[blocks.length - 1].nextBlockId = null;
+                    }
+                    dragging.alg = null;
+                    dragging.fromIdx = -1;
+                    nextTick(() => renderSchema());
+                };
+
+                // Algorithm params CRUD
+                const addAlgorithmParam = () => {
+                    selectedNode.value.params.push({
+                        id: nextId('p'), key: 'new_param', type: 'string', value: '', description: ''
+                    });
+                };
+
+                const startEditParam = (idx) => {
+                    editingParamIdx.value = idx;
+                    const p = selectedNode.value.params[idx];
+                    editingParam.key = p.key;
+                    editingParam.type = p.type;
+                    editingParam.value = p.value;
+                    editingParam.description = p.description;
+                };
+
+                const saveParamEdit = (idx) => {
+                    const p = selectedNode.value.params[idx];
+                    p.key = editingParam.key;
+                    p.type = editingParam.type;
+                    p.value = editingParam.type === 'boolean' ? (editingParam.value === 'true' || editingParam.value === true) : editingParam.value;
+                    p.description = editingParam.description;
+                    editingParamIdx.value = -1;
+                };
+
+                const cancelParamEdit = () => {
+                    editingParamIdx.value = -1;
+                };
+
+                const deleteAlgorithmParam = (idx) => {
+                    if (confirm('Удалить этот параметр?')) {
+                        selectedNode.value.params.splice(idx, 1);
+                        if (editingParamIdx.value === idx) editingParamIdx.value = -1;
+                    }
+                };
+
+                // Block params CRUD
+                const openAddParamModal = () => {
+                    isEditingParam.value = false;
+                    editingBlockParamIndex.value = -1;
+                    Object.assign(newParam, { key: '', label: '', controlType: 'text', value: '', hint: '' });
+                    showAddParamModal.value = true;
+                };
+
+                const editParam = (param) => {
+                    isEditingParam.value = true;
+                    const idx = selectedNode.value.params.findIndex(p => p.id === param.id);
+                    editingBlockParamIndex.value = idx;
+                    Object.assign(newParam, { ...param });
+                    showAddParamModal.value = true;
+                };
+
+                const removeBlockParam = (idx) => {
+                    if (confirm('Удалить параметр блока?')) {
+                        selectedNode.value.params.splice(idx, 1);
+                    }
+                };
+
+                const closeModal = () => {
+                    showAddParamModal.value = false;
+                };
+
+                const saveBlockParam = () => {
+                    if (!newParam.key || !newParam.label) return;
+                    if (isEditingParam.value) {
+                        const idx = editingBlockParamIndex.value;
+                        if (idx > -1) {
+                            Object.assign(selectedNode.value.params[idx], { ...newParam });
+                        }
+                    } else {
+                        selectedNode.value.params.push({ id: nextId('bp'), ...newParam });
+                    }
+                    showAddParamModal.value = false;
+                };
+
+                const generateBlockHTML = () => {
+                    const block = selectedNode.value;
+                    if (!block || !block.params.length) return;
+                    let html = `<div class="algorithm-block">\n  <h3>${block.schemaLabel || block.label}</h3>\n  <div class="block-params">\n`;
+                    block.params.forEach(param => {
+                        if (param.controlType === 'toggle') {
+                            html += `    <div class="param-toggle">\n      <label><input type="checkbox" ${param.value ? 'checked' : ''} data-param="${param.key}"><span>${param.label}</span></label>\n`;
+                            if (param.hint) html += `      <span class="hint">${param.hint}</span>\n`;
+                            html += `    </div>\n`;
+                        } else {
+                            html += `    <div class="param-text">\n      <label for="${param.key}">${param.label}</label>\n      <input type="text" id="${param.key}" value="${param.value}" data-param="${param.key}">\n    </div>\n`;
+                        }
+                    });
+                    html += `  </div>\n</div>`;
+                    generatedHTML.value = html;
+                };
+
+                const generateAlgorithmHTML = () => {
+                    const alg = selectedNode.value;
+                    if (!alg || !alg.blocks.length) return;
+                    let html = `<div class="algorithm-group">\n  <h2>${alg.label}</h2>\n`;
+                    alg.blocks.forEach(block => {
+                        html += `  <div class="algorithm-block">\n    <h3>${block.schemaLabel || block.label}</h3>\n    <div class="block-params">\n`;
+                        block.params.forEach(param => {
+                            if (param.controlType === 'toggle') {
+                                html += `      <div class="param-toggle">\n        <label><input type="checkbox" ${param.value ? 'checked' : ''} data-param="${param.key}"><span>${param.label}</span></label>\n`;
+                                if (param.hint) html += `        <span class="hint">${param.hint}</span>\n`;
+                                html += `      </div>\n`;
+                            } else {
+                                html += `      <div class="param-text">\n        <label for="${param.key}">${param.label}</label>\n        <input type="text" id="${param.key}" value="${param.value}" data-param="${param.key}">\n      </div>\n`;
+                            }
+                        });
+                        html += `    </div>\n  </div>\n`;
+                    });
+                    html += `</div>`;
+                    generatedAlgorithmHTML.value = html;
+                };
+
+                const exportJSON = () => {
+                    const alg = selectedNode.value;
+                    const exportData = {
+                        algorithm: {
+                            id: alg.id,
+                            name: alg.label,
+                            global_params: alg.params.map(p => ({ key: p.key, type: p.type, value: p.value })),
+                            blocks: alg.blocks.map(b => ({
+                                id: b.id,
+                                name: b.label,
+                                schema_label: b.schemaLabel,
+                                next_block: b.nextBlockId,
+                                params: b.params.map(p => ({ key: p.key, label: p.label, control_type: p.controlType, value: p.value }))
+                            }))
+                        }
+                    };
+                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `algorithm_${alg.id}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                };
+
+                const renderSchema = () => {
+                    if (!svgContainer.value) return;
+                    const alg = findParentAlgorithm(selectedNode.value);
+                    if (!alg) return;
+
+                    const container = svgContainer.value;
+                    const width = container.clientWidth || 600;
+                    const height = container.clientHeight || 400;
+
+                    d3.select(container).selectAll('*').remove();
+
+                    const svg = d3.select(container)
+                        .append('svg')
+                        .attr('width', width)
+                        .attr('height', height);
+
+                    const g = svg.append('g');
+
+                    const zoom = d3.zoom().scaleExtent([0.1, 4]).on('zoom', (event) => {
+                        g.attr('transform', event.transform);
+                    });
+                    svg.call(zoom);
+
+                    const defs = svg.append('defs');
+                    defs.append('marker')
+                        .attr('id', 'arrowhead')
+                        .attr('viewBox', '0 0 10 10')
+                        .attr('refX', 8).attr('refY', 5)
+                        .attr('markerWidth', 6).attr('markerHeight', 6)
+                        .attr('orient', 'auto')
+                        .append('path')
+                        .attr('d', 'M 0 0 L 10 5 L 0 10 z')
+                        .attr('fill', '#f97316');
+
+                    const blocks = alg.blocks;
+                    const blockWidth = 220;
+                    const blockHeight = 64;
+                    const startX = (width - blockWidth) / 2;
+                    const startY = 40;
+                    const gap = 74;
+
+                    // Calculate positions based on chain
+                    const orderedBlocks = [];
+                    const visited = new Set();
+
+                    // Find start block (no other block points to it)
+                    const targetIds = new Set(blocks.map(b => b.nextBlockId).filter(Boolean));
+                    let startBlock = blocks.find(b => !targetIds.has(b.id));
+                    if (!startBlock) startBlock = blocks[0];
+
+                    let current = startBlock;
+                    while (current && !visited.has(current.id)) {
+                        visited.add(current.id);
+                        orderedBlocks.push(current);
+                        current = blocks.find(b => b.id === current.nextBlockId);
+                    }
+
+                    // Add remaining blocks not in chain
+                    const remaining = blocks.filter(b => !visited.has(b.id));
+                    remaining.forEach(b => orderedBlocks.push(b));
+
+                    const blockData = orderedBlocks.map((b, i) => ({
+                        ...b,
+                        x: startX,
+                        y: startY + i * (blockHeight + gap),
+                        width: blockWidth,
+                        height: blockHeight
+                    }));
+
+                    const selectedId = selectedNode.value?.type === 'Блок' ? selectedNode.value.id : null;
+
+                    g.selectAll('.schema-node')
+                        .data(blockData)
+                        .enter()
+                        .append('rect')
+                        .attr('class', 'schema-node')
+                        .attr('x', d => d.x)
+                        .attr('y', d => d.y)
+                        .attr('width', d => d.width)
+                        .attr('height', d => d.height)
+                        .attr('rx', 8)
+                        .attr('ry', 8)
+                        .attr('fill', d => d.id === selectedId ? '#ea580c' : '#1e293b')
+                        .attr('stroke', d => d.id === selectedId ? '#fbbf24' : '#f97316')
+                        .attr('stroke-width', d => d.id === selectedId ? 3 : 2)
+                        .attr('cursor', 'pointer')
+                        .on('click', (event, d) => {
+                            const blk = blocks.find(b => b.id === d.id);
+                            if (blk) selectNode(blk);
+                        });
+
+                    g.selectAll('.schema-text')
+                        .data(blockData)
+                        .enter()
+                        .append('text')
+                        .attr('x', d => d.x + d.width / 2)
+                        .attr('y', d => d.y + d.height / 2 - 5)
+                        .attr('text-anchor', 'middle')
+                        .attr('dominant-baseline', 'middle')
+                        .text(d => d.schemaLabel || d.label)
+                        .attr('fill', d => d.id === selectedId ? '#ffffff' : '#e2e8f0')
+                        .attr('font-size', '14px')
+                        .attr('font-weight', d => d.id === selectedId ? '600' : '400')
+                        .attr('font-family', 'system-ui, sans-serif')
+                        .style('pointer-events', 'none');
+
+                    // Draw connections
+                    for (let i = 0; i < blockData.length - 1; i++) {
+                        const from = blockData[i];
+                        const to = blockData[i + 1];
+
+                        g.append('path')
+                            .attr('d', `M ${from.x + from.width / 2} ${from.y + from.height} L ${to.x + to.width / 2} ${to.y}`)
+                            .attr('stroke', '#f97316')
+                            .attr('stroke-width', 2)
+                            .attr('fill', 'none')
+                            .attr('marker-end', 'url(#arrowhead)')
+                            .style('pointer-events', 'none');
+                    }
+
+                    g.selectAll('.step-label')
+                        .data(blockData)
+                        .enter()
+                        .append('text')
+                        .attr('x', d => d.x - 22)
+                        .attr('y', d => d.y + d.height / 2 + 5)
+                        .attr('text-anchor', 'middle')
+                        .attr('fill', '#f97316')
+                        .attr('font-size', '14px')
+                        .attr('font-weight', '600')
+                        .text((d, i) => `${i + 1}`)
+                        .style('pointer-events', 'none');
+                };
+
+                // Re-render schema when selection changes for blocks
+                watch(selectedNode, (newVal) => {
+                    if (newVal?.type === 'Блок') {
+                        nextTick(() => setTimeout(renderSchema, 50));
+                    }
+                });
+
+                onMounted(() => {
+                    if (data.modules.length > 0 && data.modules[0].algorithms.length > 0) {
+                        selectNode(data.modules[0].algorithms[0]);
+                    }
+                });
+
+                return {
+                    data, activeTab, selectedNode, showAddParamModal, isEditingParam,
+                    editingParamIdx, editingParam, newParam,
+                    generatedHTML, generatedAlgorithmHTML, svgContainer,
+                    getAllBlocksExceptCurrent,
+                    selectNode, addModule, addAlgorithm, addBlockToModule, addBlockToAlgorithm, deleteNode,
+                    onDragStart, onDrop,
+                    addAlgorithmParam, startEditParam, saveParamEdit, cancelParamEdit, deleteAlgorithmParam,
+                    openAddParamModal, editParam, removeBlockParam, closeModal, saveBlockParam,
+                    generateBlockHTML, generateAlgorithmHTML, exportJSON
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
+
